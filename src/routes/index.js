@@ -6,4 +6,4 @@ const router = express.Router();
 // Mount all module routes here
 router.use('/auth', authRoutes);
 
-export default router;     
+export default router;       

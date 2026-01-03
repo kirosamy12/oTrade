@@ -21,7 +21,7 @@ const uploadImage = async (imagePath, folder = 'courses') => {
       transformation: [
         { width: 1200, height: 630, crop: 'limit' }
       ]
-    });
+    }); 
     
     return result.secure_url;
   } catch (error) {

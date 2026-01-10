@@ -23,6 +23,7 @@ const adminSchema = new mongoose.Schema({
   },
 permissions: [
   {
+    psychology: [String],
     courses: [String],
     analysis: [String],
     webinars: [String]

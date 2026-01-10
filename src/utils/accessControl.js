@@ -1,6 +1,57 @@
 /**
  * Access Control Utilities
  * Handles plan-based access control and content filtering
+ * 
+ * Example usage for fetching a course by ID with Accept-Language header:
+ * 
+ * GET /api/courses/123
+ * Accept-Language: ar
+ * Authorization: Bearer <token>
+ * 
+ * Response for admin:
+ * {
+ *   "course": {
+ *     "id": "123",
+ *     "plans": ["free", "pro"],
+ *     "translations": {
+ *       "ar": { "title": "الدورة التدريبية", "description": "وصف الدورة", "content": "محتوى الدورة" },
+ *       "en": { "title": "Course Title", "description": "Course Description", "content": "Course Content" }
+ *     },
+ *     "contentUrl": "https://example.com/video.mp4",
+ *     "coverImageUrl": "https://example.com/image.jpg",
+ *     "createdAt": "2023-01-01T00:00:00.000Z"
+ *   }
+ * }
+ * 
+ * Response for user with access:
+ * {
+ *   "course": {
+ *     "id": "123",
+ *     "translations": [{
+ *       "language": "ar",
+ *       "title": "الدورة التدريبية",
+ *       "description": "وصف الدورة",
+ *       "content": "محتوى الدورة"
+ *     }],
+ *     "contentUrl": "https://example.com/video.mp4",
+ *     "coverImageUrl": "https://example.com/image.jpg",
+ *     "createdAt": "2023-01-01T00:00:00.000Z"
+ *   }
+ * }
+ * 
+ * Response for user without access:
+ * {
+ *   "course": {
+ *     "id": "123",
+ *     "translations": [{
+ *       "language": "ar",
+ *       "title": "الدورة التدريبية",
+ *       "description": "وصف الدورة"
+ *     }],
+ *     "locked": true,
+ *     "createdAt": "2023-01-01T00:00:00.000Z"
+ *   }
+ * }
  */
 
 /**

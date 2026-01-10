@@ -1,9 +1,9 @@
 const detectLanguage = (req, res, next) => {
   const acceptLanguage = req.header('Accept-Language');
   
-  // Default to Arabic if no Accept-Language header or it's not English
+  // Default to English if no Accept-Language header
   if (!acceptLanguage) {
-    req.lang = 'ar';
+    req.lang = 'en';
     return next();
   }
   

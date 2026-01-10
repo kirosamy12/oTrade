@@ -3,11 +3,121 @@ import Translation from '../translations/translation.model.js';
 import { createOrUpdateTranslation, getTranslationsByEntity } from '../translations/translation.service.js';
 import { validateTranslationsForCreate, validateContentUrl } from '../../utils/translationValidator.js';
 import { formatAdminResponse, formatContentResponse } from '../../utils/accessControl.js';
+import { uploadImage } from '../../utils/cloudinary.js';
 import mongoose from 'mongoose';
 
 const createWebinar = async (req, res) => {
   try {
-    const { date, isLive, plans, requiredPlan, translations } = req.body;
+    // Handle FormData request
+    let date, isLive, plans, requiredPlan, translations, contentUrl, coverImageUrl;
+    
+    if (req.files && req.files.coverImage) {
+      // FormData with file upload
+      const coverImageFile = req.files.coverImage[0];
+      
+      // Parse date, isLive, requiredPlan from FormData
+      date = req.body.date;
+      isLive = req.body.isLive;
+      requiredPlan = req.body.requiredPlan;
+      
+      // Parse plans from FormData (handle both single value, array, and multiple entries like plans[])
+      if (req.body.plans !== undefined) {
+        if (Array.isArray(req.body.plans)) {
+          // Handle multiple plans[] entries or already formed array
+          plans = req.body.plans.filter(p => p !== ''); // Remove empty values
+        } else {
+          // Handle single plan value
+          plans = [req.body.plans].filter(p => p !== ''); // Remove empty values
+        }
+      } else if (req.body['plans[]'] !== undefined) {
+        // Handle case where plans are sent as 'plans[]' in FormData
+        if (Array.isArray(req.body['plans[]'])) {
+          plans = req.body['plans[]'].filter(p => p !== ''); // Remove empty values
+        } else {
+          plans = [req.body['plans[]']].filter(p => p !== ''); // Remove empty values
+        }
+      }
+      
+      // Parse contentUrl if provided
+      contentUrl = req.body.contentUrl;
+      
+      // Parse translations from FormData
+      if (req.body.translations) {
+        if (typeof req.body.translations === 'string') {
+          try {
+            // If it's a JSON string, parse it
+            translations = JSON.parse(req.body.translations);
+          } catch (e) {
+            // If it's not a JSON string, it might be individual translation fields
+            translations = [];
+            // Look for translation fields like translations[0], translations[1], etc.
+            Object.keys(req.body).forEach(key => {
+              if (key.startsWith('translations[')) {
+                try {
+                  const translation = JSON.parse(req.body[key]);
+                  translations.push(translation);
+                } catch (e) {
+                  // Ignore invalid translation strings
+                }
+              }
+            });
+          }
+        } else {
+          translations = req.body.translations;
+        }
+      } else {
+        // Support the format: title[en], title[ar], description[en], description[ar], content[en], content[ar]
+        const enTitle = req.body['title[en]'] || req.body['title.en'];
+        const arTitle = req.body['title[ar]'] || req.body['title.ar'];
+        const enDescription = req.body['description[en]'] || req.body['description.en'];
+        const arDescription = req.body['description[ar]'] || req.body['description.ar'];
+        const enContent = req.body['content[en]'] || req.body['content.en'];
+        const arContent = req.body['content[ar]'] || req.body['content.ar'];
+        
+        if (enTitle !== undefined || arTitle !== undefined || 
+            enDescription !== undefined || arDescription !== undefined ||
+            enContent !== undefined || arContent !== undefined) {
+          translations = [];
+          
+          if (enTitle !== undefined || enDescription !== undefined || enContent !== undefined) {
+            translations.push({
+              language: 'en',
+              title: enTitle || '',
+              description: enDescription || '',
+              content: enContent || ''
+            });
+          }
+          
+          if (arTitle !== undefined || arDescription !== undefined || arContent !== undefined) {
+            translations.push({
+              language: 'ar',
+              title: arTitle || '',
+              description: arDescription || '',
+              content: arContent || ''
+            });
+          }
+        }
+      }
+      
+      // Upload cover image to Cloudinary
+      if (coverImageFile) {
+        try {
+          coverImageUrl = await uploadImage(coverImageFile, 'webinars');
+          // With memory storage, no temporary file cleanup needed
+        } catch (uploadError) {
+          console.error('Error uploading cover image:', uploadError);
+          return res.status(400).json({ error: 'Failed to upload cover image' });
+        }
+      }
+    } else {
+      // Regular JSON request
+      ({ date, isLive, plans, requiredPlan, translations, contentUrl, coverImageUrl } = req.body);
+    }
+    
+    // Validate input
+    if (!plans || !Array.isArray(plans) || plans.length === 0) {
+      return res.status(400).json({ error: 'Plans array is required.' });
+    }
     
     // Validate translations
     const validation = validateTranslationsForCreate(translations);
@@ -18,7 +128,9 @@ const createWebinar = async (req, res) => {
     const { ar: arabicTranslation, en: englishTranslation } = validation.data;
     
     // Create webinar with new fields
-    const webinarData = {};
+    const webinarData = {
+      plans
+    };
     
     // Set date if provided
     if (date !== undefined) {
@@ -30,9 +142,14 @@ const createWebinar = async (req, res) => {
       webinarData.isLive = isLive;
     }
     
-    // Use plans as primary field (single source of truth)
-    if (plans !== undefined) {
-      webinarData.plans = plans;
+    // Set contentUrl if provided
+    if (contentUrl !== undefined) {
+      webinarData.contentUrl = contentUrl;
+    }
+    
+    // Set coverImageUrl if provided
+    if (coverImageUrl !== undefined) {
+      webinarData.coverImageUrl = coverImageUrl;
     }
     
     // Legacy support: if requiredPlan provided but no plans, use it
@@ -65,27 +182,12 @@ const createWebinar = async (req, res) => {
     // Fetch created translations for response
     const createdTranslations = await getTranslationsByEntity('webinar', webinar._id);
     
-    // Format translations as object for admin response
-    const translationsObject = {};
-    createdTranslations.forEach(t => {
-      translationsObject[t.language] = {
-        title: t.title,
-        description: t.description,
-        content: t.content
-      };
-    });
+    // Return admin response with full data
+    const response = formatAdminResponse(webinar, createdTranslations);
     
     res.status(201).json({
       message: 'Webinar created successfully.',
-      webinar: {
-        id: webinar._id,
-        date: webinar.date,
-        isLive: webinar.isLive,
-        plans: webinar.plans,
-        translations: translationsObject,
-        createdAt: webinar.createdAt,
-        updatedAt: webinar.updatedAt
-      }
+      webinar: response
     });
   } catch (error) {
     console.error('Error creating webinar:', error);
@@ -96,7 +198,6 @@ const createWebinar = async (req, res) => {
 const updateWebinar = async (req, res) => {
   try {
     const { id } = req.params;
-    const { date, isLive, plans, requiredPlan, translations } = req.body;
     
     // Validate ObjectId
     if (!mongoose.Types.ObjectId.isValid(id)) {
@@ -109,11 +210,86 @@ const updateWebinar = async (req, res) => {
       return res.status(404).json({ error: 'Webinar not found.' });
     }
     
+    // Handle FormData request
+    let date, isLive, plans, requiredPlan, translations, contentUrl, coverImageUrl;
+    
+    if (req.files && req.files.coverImage) {
+      // FormData with file upload
+      const coverImageFile = req.files.coverImage[0];
+      
+      // Parse date, isLive, requiredPlan from FormData
+      date = req.body.date;
+      isLive = req.body.isLive;
+      requiredPlan = req.body.requiredPlan;
+      
+      // Parse plans from FormData (handle both single value, array, and multiple entries like plans[])
+      if (req.body.plans !== undefined) {
+        if (Array.isArray(req.body.plans)) {
+          // Handle multiple plans[] entries or already formed array
+          plans = req.body.plans.filter(p => p !== ''); // Remove empty values
+        } else {
+          // Handle single plan value
+          plans = [req.body.plans].filter(p => p !== ''); // Remove empty values
+        }
+      }
+      
+      // Parse contentUrl if provided
+      contentUrl = req.body.contentUrl;
+      
+      // Parse translations from FormData
+      if (req.body.translations) {
+        if (typeof req.body.translations === 'string') {
+          try {
+            // If it's a JSON string, parse it
+            translations = JSON.parse(req.body.translations);
+          } catch (e) {
+            // If it's not a JSON string, it might be individual translation fields
+            translations = [];
+            // Look for translation fields like translations[0], translations[1], etc.
+            Object.keys(req.body).forEach(key => {
+              if (key.startsWith('translations[')) {
+                try {
+                  const translation = JSON.parse(req.body[key]);
+                  translations.push(translation);
+                } catch (e) {
+                  // Ignore invalid translation strings
+                }
+              }
+            });
+          }
+        } else {
+          translations = req.body.translations;
+        }
+      }
+      
+      // Upload cover image to Cloudinary
+      if (coverImageFile) {
+        try {
+          coverImageUrl = await uploadImage(coverImageFile.path, 'webinars');
+          // Clean up temporary file after upload
+          // Note: In a real implementation, you might want to delete the temp file
+        } catch (uploadError) {
+          console.error('Error uploading cover image:', uploadError);
+          return res.status(400).json({ error: 'Failed to upload cover image' });
+        }
+      }
+    } else {
+      // Regular JSON request
+      ({ date, isLive, plans, requiredPlan, translations, contentUrl, coverImageUrl } = req.body);
+    }
+    
     // Update webinar fields
     if (date !== undefined) webinar.date = date;
     if (isLive !== undefined) webinar.isLive = isLive;
-    if (plans !== undefined) webinar.plans = plans;
+    if (plans !== undefined) {
+      if (!Array.isArray(plans) || plans.length === 0) {
+        return res.status(400).json({ error: 'Plans array is required and cannot be empty.' });
+      }
+      webinar.plans = plans;
+    }
     if (requiredPlan !== undefined && plans === undefined) webinar.requiredPlan = requiredPlan;
+    if (contentUrl !== undefined) webinar.contentUrl = contentUrl;
+    if (coverImageUrl !== undefined) webinar.coverImageUrl = coverImageUrl;
     
     await webinar.save();
     
@@ -136,27 +312,12 @@ const updateWebinar = async (req, res) => {
     // Fetch updated translations for response
     const updatedTranslations = await getTranslationsByEntity('webinar', webinar._id);
     
-    // Format translations as object for admin response
-    const translationsObject = {};
-    updatedTranslations.forEach(t => {
-      translationsObject[t.language] = {
-        title: t.title,
-        description: t.description,
-        content: t.content
-      };
-    });
+    // Return admin response with full data
+    const response = formatAdminResponse(webinar, updatedTranslations);
     
     res.status(200).json({
       message: 'Webinar updated successfully.',
-      webinar: {
-        id: webinar._id,
-        date: webinar.date,
-        isLive: webinar.isLive,
-        plans: webinar.plans,
-        translations: translationsObject,
-        createdAt: webinar.createdAt,
-        updatedAt: webinar.updatedAt
-      }
+      webinar: response
     });
   } catch (error) {
     console.error('Error updating webinar:', error);
@@ -255,7 +416,11 @@ const getWebinarById = async (req, res) => {
     const translations = await getTranslationsByEntity('webinar', webinar._id);
     
     // Determine if user is admin (from JWT via middleware)
-    const isAdmin = req.user && req.user.role === 'admin';
+    const isAdmin = req.userType === 'admin' && req.role === 'admin';
+    const isSuperAdmin = req.userType === 'admin' && req.role === 'super_admin';
+    const isAdminUser = isAdmin || isSuperAdmin;
+    
+    // Get user plans from user object if it exists (regular user)
     const userPlans = req.user && req.user.subscriptionPlan ? [req.user.subscriptionPlan] : ['free'];
     
     // Use formatContentResponse with access control
@@ -264,13 +429,13 @@ const getWebinarById = async (req, res) => {
       translations,
       req.lang || 'en',
       userPlans,
-      isAdmin
+      isAdminUser
     );
     
     // Add webinar-specific fields
     if (webinar.date) content.date = webinar.date;
     if (webinar.isLive !== undefined) content.isLive = webinar.isLive;
-    if (isAdmin && webinar.plans) content.plans = webinar.plans;
+    if (isAdminUser && webinar.plans) content.plans = webinar.plans;
     
     res.status(200).json({
       webinar: content

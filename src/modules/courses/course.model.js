@@ -1,23 +1,9 @@
 import mongoose from 'mongoose';
 
 const courseSchema = new mongoose.Schema({
-  price: {
-    type: Number,
-    required: true,
-    min: 0
-  },
-  isPaid: {
-    type: Boolean,
-    default: false
-  },
-  isInSubscription: {
-    type: Boolean,
-    default: false
-  },
   plans: {
     type: [String],
-    enum: ['free', 'pro', 'master', 'otrade'],
-    default: ['free']
+    required: true
   },
   contentUrl: {
     type: String,

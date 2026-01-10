@@ -5,12 +5,18 @@ import { generateToken } from '../../config/jwt.js';
 const SALT_ROUNDS = 10;
 
 const register = async (userData) => {
-  const { name, email, password } = userData;
+  const { name, email, password, username } = userData;
   
-  // Check if user already exists
-  const existingUser = await User.findOne({ email });
-  if (existingUser) {
+  // Check if user already exists by email
+  const existingUserByEmail = await User.findOne({ email });
+  if (existingUserByEmail) {
     throw new Error('Email already registered');
+  }
+  
+  // Check if username already exists
+  const existingUserByUsername = await User.findOne({ username });
+  if (existingUserByUsername) {
+    throw new Error('Username already exists');
   }
   
   // Hash password
@@ -20,13 +26,24 @@ const register = async (userData) => {
   const user = new User({
     name,
     email,
+    username,
     password: hashedPassword,
     role: 'user',
     subscriptionPlan: 'free'
   });
   
   await user.save();
-  return { message: 'User registered successfully' };
+  return { 
+    message: 'User registered successfully',
+    user: {
+      id: user._id,
+      name: user.name,
+      email: user.email,
+      username: user.username,
+      role: user.role,
+      subscriptionPlan: user.subscriptionPlan
+    }
+  };
 };
 
 const login = async (email, password) => {
@@ -45,8 +62,9 @@ const login = async (email, password) => {
   // Generate JWT token
   const token = generateToken({
     userId: user._id,
+    userType: 'user',
     role: user.role,
-    subscriptionStatus: user.subscriptionStatus,
+    subscriptionPlan: user.subscriptionPlan,
     subscriptionExpiry: user.subscriptionExpiry
   });
   
@@ -57,8 +75,9 @@ const login = async (email, password) => {
       id: user._id,
       name: user.name,
       email: user.email,
+      username: user.username,
       role: user.role,
-      subscriptionStatus: user.subscriptionStatus
+      subscriptionPlan: user.subscriptionPlan
     }
   };
 };

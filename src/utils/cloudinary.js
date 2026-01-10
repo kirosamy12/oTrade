@@ -9,21 +9,60 @@ cloudinary.v2.config({
 
 /**
  * Upload image to Cloudinary
- * @param {string} imagePath - Path to the image file or base64 data URL
+ * @param {string|Buffer|object} imageSource - Path to the image file, base64 data URL, or file object from multer
  * @param {string} folder - Folder name in Cloudinary to store the image
  * @returns {Promise<string>} - Cloudinary URL of the uploaded image
  */
-const uploadImage = async (imagePath, folder = 'courses') => {
+const uploadImage = async (imageSource, folder = 'courses') => {
   try {
-    const result = await cloudinary.v2.uploader.upload(imagePath, {
+    // Handle different input types
+    const uploadOptions = {
       folder: folder,
       resource_type: 'image',
       transformation: [
         { width: 1200, height: 630, crop: 'limit' }
       ]
-    }); 
-    
-    return result.secure_url;
+    };
+
+    if (typeof imageSource === 'string') {
+      // Handle file path or base64 data URL
+      const result = await cloudinary.v2.uploader.upload(imageSource, uploadOptions);
+      return result.secure_url;
+    } else if (imageSource instanceof Buffer) {
+      // Handle buffer from memory storage using promise wrapper
+      return new Promise((resolve, reject) => {
+        const stream = cloudinary.v2.uploader.upload_stream(
+          uploadOptions, // Keep as 'image' resource type
+          (error, result) => {
+            if (error) {
+              console.error('Error uploading buffer to Cloudinary:', error);
+              reject(new Error('Failed to upload image to Cloudinary'));
+            } else {
+              resolve(result.secure_url);
+            }
+          }
+        );
+        stream.end(imageSource);
+      });
+    } else if (imageSource && typeof imageSource === 'object' && imageSource.buffer) {
+      // Handle multer file object with buffer
+      return new Promise((resolve, reject) => {
+        const stream = cloudinary.v2.uploader.upload_stream(
+          uploadOptions,
+          (error, result) => {
+            if (error) {
+              console.error('Error uploading buffer to Cloudinary:', error);
+              reject(new Error('Failed to upload image to Cloudinary'));
+            } else {
+              resolve(result.secure_url);
+            }
+          }
+        );
+        stream.end(imageSource.buffer);
+      });
+    } else {
+      throw new Error('Invalid image source provided');
+    }
   } catch (error) {
     console.error('Error uploading image to Cloudinary:', error);
     throw new Error('Failed to upload image to Cloudinary');
@@ -51,16 +90,16 @@ const deleteImage = async (publicId) => {
  */
 const extractPublicId = (url) => {
   if (!url) return null;
-  
+
   // Extract public ID from Cloudinary URL
   const regex = /\/([^\/]+)\/([^\/]+)\.[^\/]+$/;
   const match = url.match(regex);
-  
+
   if (match) {
     // Format: folder/public_id
     return match[1] + '/' + match[2];
   }
-  
+
   return null;
 };
 

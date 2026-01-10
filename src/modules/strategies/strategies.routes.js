@@ -1,8 +1,9 @@
 import express from 'express';
-import { authenticate } from '../../middlewares/auth.middleware.js';
-import { authorizeRoles } from '../../middlewares/role.middleware.js';
+import { authenticate } from '../../middlewares/rbac.middleware.js';
+import { checkPermission } from '../../middlewares/rbac.middleware.js';
 import { detectLanguage } from '../../middlewares/lang.middleware.js';
 import { requirePlan } from '../../middlewares/subscription.middleware.js';
+import upload, { uploadWithOptionalImage } from '../../middlewares/upload.middleware.js';
 import { createStrategy, updateStrategy, deleteStrategy, getAllStrategies, getStrategyById } from './strategies.controller.js';
 
 const router = express.Router();
@@ -15,9 +16,9 @@ router.get('/:id', detectLanguage, getStrategyById);
 router.get('/protected/:id', authenticate, requirePlan('pro'), detectLanguage, getStrategyById);
 
 // Admin routes
-router.post('/', authenticate, authorizeRoles('admin'), createStrategy);
-router.put('/:id', authenticate, authorizeRoles('admin'), updateStrategy);
-router.delete('/:id', authenticate, authorizeRoles('admin'), deleteStrategy);
-router.get('/admin', authenticate, authorizeRoles('admin'), getAllStrategies);
+router.post('/', authenticate(['admin', 'super_admin']), checkPermission('strategies', 'create'), uploadWithOptionalImage, createStrategy);
+router.put('/:id', authenticate(['admin', 'super_admin']), checkPermission('strategies', 'update'), uploadWithOptionalImage, updateStrategy);
+router.delete('/:id', authenticate(['admin', 'super_admin']), checkPermission('strategies', 'delete'), deleteStrategy);
+router.get('/admin', authenticate(['admin', 'super_admin']), checkPermission('strategies', 'view'), getAllStrategies);
 
 export default router;

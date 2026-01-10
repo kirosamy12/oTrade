@@ -13,18 +13,15 @@ const analysisSchema = new mongoose.Schema({
   },
   plans: {
     type: [String],
-    enum: ['free', 'pro', 'master', 'otrade'],
-    default: ['free']
+    required: true
   },
   contentUrl: {
     type: String,
     required: false
   },
-  // Legacy field - kept for backward compatibility
-  requiredPlan: {
+  coverImageUrl: {
     type: String,
-    enum: ['free', 'pro', 'master', 'otrade'],
-    default: 'free'
+    required: false
   }
 }, {
   timestamps: true

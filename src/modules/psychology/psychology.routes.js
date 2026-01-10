@@ -1,8 +1,9 @@
 import express from 'express';
-import { authenticate } from '../../middlewares/auth.middleware.js';
-import { authorizeRoles } from '../../middlewares/role.middleware.js';
+import { authenticate } from '../../middlewares/rbac.middleware.js';
+import { checkPermission } from '../../middlewares/rbac.middleware.js';
 import { detectLanguage } from '../../middlewares/lang.middleware.js';
 import { requirePlan } from '../../middlewares/subscription.middleware.js';
+import upload, { uploadWithOptionalImage } from '../../middlewares/upload.middleware.js';
 import { createPsychology, updatePsychology, deletePsychology, getAllPsychology, getPsychologyById } from './psychology.controller.js';
 
 const router = express.Router();
@@ -15,9 +16,9 @@ router.get('/:id', detectLanguage, getPsychologyById);
 router.get('/advanced/:id', authenticate, requirePlan('master'), detectLanguage, getPsychologyById);
 
 // Admin routes
-router.post('/', authenticate, authorizeRoles('admin'), createPsychology);
-router.put('/:id', authenticate, authorizeRoles('admin'), updatePsychology);
-router.delete('/:id', authenticate, authorizeRoles('admin'), deletePsychology);
-router.get('/psychology/admin', authenticate, authorizeRoles('admin'), getAllPsychology);
+router.post('/', authenticate(['admin', 'super_admin']), checkPermission('psychology', 'create'), uploadWithOptionalImage, createPsychology);
+router.put('/:id', authenticate(['admin', 'super_admin']), checkPermission('psychology', 'update'), uploadWithOptionalImage, updatePsychology);
+router.delete('/:id', authenticate(['admin', 'super_admin']), checkPermission('psychology', 'delete'), deletePsychology);
+router.get('/psychology/admin', authenticate(['admin', 'super_admin']), checkPermission('psychology', 'view'), getAllPsychology);
 
 export default router;

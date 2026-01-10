@@ -1,8 +1,9 @@
 import express from 'express';
-import { authenticate } from '../../middlewares/auth.middleware.js';
-import { authorizeRoles } from '../../middlewares/role.middleware.js';
+import { authenticate } from '../../middlewares/rbac.middleware.js';
+import { checkPermission } from '../../middlewares/rbac.middleware.js';
 import { detectLanguage } from '../../middlewares/lang.middleware.js';
 import { requirePlan } from '../../middlewares/subscription.middleware.js';
+import upload, { uploadWithOptionalImage } from '../../middlewares/upload.middleware.js';
 import { createCourse, updateCourse, deleteCourse, getAllCourses, getCourseById } from './courses.controller.js';
 
 const router = express.Router();
@@ -15,9 +16,9 @@ router.get('/:id', detectLanguage, getCourseById);
 router.get('/protected/:id', authenticate, requirePlan('pro'), detectLanguage, getCourseById);
 
 // Admin routes
-router.post('/addcourse', authenticate, authorizeRoles('admin'), createCourse); //done
-router.put('/updatecourse/:id', authenticate, authorizeRoles('admin'), updateCourse);//done
-router.delete('/deletecourse/:id', authenticate, authorizeRoles('admin'), deleteCourse);//done
-router.get('/admin/allcourses', authenticate, authorizeRoles('admin'), getAllCourses);//done
+router.post('/addcourse', authenticate(['admin', 'super_admin']), checkPermission('courses', 'create'), uploadWithOptionalImage, createCourse); //done
+router.put('/updatecourse/:id', authenticate(['admin', 'super_admin']), checkPermission('courses', 'update'), uploadWithOptionalImage, updateCourse);//done
+router.delete('/deletecourse/:id', authenticate(['admin', 'super_admin']), checkPermission('courses', 'delete'), deleteCourse);//done
+router.get('/admin/allcourses', authenticate(['admin', 'super_admin']), checkPermission('courses', 'view'), getAllCourses);//done
 
-export default router;
+export default router; 

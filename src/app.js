@@ -1,11 +1,26 @@
 import express from 'express';
 import connectDB from './config/db.js';
 import 'dotenv/config';
+import cors from 'cors';
 
 const app = express();
 
 // Connect to MongoDB
 connectDB();
+
+// Enable CORS with specific origins
+const corsOptions = {
+  origin: [
+    'http://localhost:5173',
+    'http://localhost:3000',
+    'https://otrade-admin.vercel.app',
+    'https://o-trade-front.vercel.app/'
+  ],
+  credentials: true,
+  optionsSuccessStatus: 200
+};
+
+app.use(cors(corsOptions));
 
 // Middleware
 app.use(express.json());
@@ -43,9 +58,9 @@ app.get('/health', (req, res) => {
 });
 
 const PORT = process.env.PORT || 3000;
-  
+
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
- 
-export default app; 
+
+export default app;

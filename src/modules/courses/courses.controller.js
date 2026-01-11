@@ -350,11 +350,8 @@ const getAllCourses = async (req, res) => {
         );
 
         // Add additional fields
-        if (course.plans) content.plans = course.plans;         // Show plans
         if (course.coverImage) content.coverImage = course.coverImage; // Cover image
         if (course.contentUrl) content.contentUrl = course.contentUrl; // Video / content URL
-        content.isPaid = course.isPaid || false;
-        content.isInSubscription = course.isInSubscription || false;
 
         return content;
       })
@@ -383,6 +380,13 @@ const getCourseById = async (req, res) => {
     if (!course) {
       return res.status(404).json({ error: 'Course not found.' });
     }
+
+    // 🔐 ONLY THIS CHECK
+    if (course.isPaid && !req.user) {
+      return res.status(401).json({
+        error: 'Authentication required to access this course'
+      });
+    }
     
     // Get translations for the course
     const translations = await getTranslationsByEntity('course', course._id);
@@ -406,8 +410,6 @@ const getCourseById = async (req, res) => {
     
     // Add course-specific fields
     content.price = course.price;
-    content.isPaid = course.isPaid;
-    content.isInSubscription = course.isInSubscription;
     if (isAdminUser && course.plans) content.plans = course.plans;
     
     res.status(200).json({

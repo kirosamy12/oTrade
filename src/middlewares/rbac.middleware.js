@@ -121,10 +121,7 @@ const checkPermission = (module, action) => {
         });
       }
 
-      // Construct the required permission string
-      const requiredPermission = `${module}:${action}`;
-      
-      // Get the admin's permissions (expecting an array of permission strings)
+      // Get the admin's permissions (actual format is array of objects like [{ courses: ['view','create'], webinars: ['view'] }])
       const adminPermissions = req.admin && req.admin.permissions ? req.admin.permissions : [];
       
       // Log for debugging
@@ -133,18 +130,37 @@ const checkPermission = (module, action) => {
         userRole: req.role,
         requestedModule: module,
         requestedAction: action,
-        requestedPermission: requiredPermission,
+        requestedPermission: `${module}:${action}`,
         userPermissions: adminPermissions
       });
       
-      // Check if the required permission exists in the admin's permissions array
-      const hasPermission = Array.isArray(adminPermissions) && 
-                           adminPermissions.includes(requiredPermission);
+      // Check if the admin has permissions for this module and action
+      // Loop over the permissions array and check if the action exists in the corresponding module array
+      let hasPermission = false;
+      
+      if (Array.isArray(adminPermissions)) {
+        // Actual format: [{ psychology: [], courses: ["view","create","update"], analysis: ["view"], webinars: ["view","create"] }]
+        // Loop over each permission object in the array
+        for (const permObj of adminPermissions) {
+          if (permObj && permObj[module] && Array.isArray(permObj[module])) {
+            if (permObj[module].includes(action)) {
+              hasPermission = true;
+              break; // Found permission, exit loop
+            }
+          }
+        }
+      } else {
+        // Fallback to original logic if not in expected format
+        hasPermission = adminPermissions && 
+                       adminPermissions[module] && 
+                       Array.isArray(adminPermissions[module]) &&
+                       adminPermissions[module].includes(action);
+      }
       
       if (!hasPermission) {
         console.log('Permission denied:', {
           adminId: req.admin ? req.admin._id : null,
-          requestedPermission,
+          requestedPermission: `${module}:${action}`,
           availablePermissions: adminPermissions
         });
         
@@ -156,7 +172,7 @@ const checkPermission = (module, action) => {
       
       console.log('Permission granted:', {
         adminId: req.admin ? req.admin._id : null,
-        grantedPermission: requiredPermission
+        grantedPermission: `${module}:${action}`
       });
 
       next();

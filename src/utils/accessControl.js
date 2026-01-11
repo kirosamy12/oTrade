@@ -129,6 +129,12 @@ export const filterContentByAccess = (content, userHasAccess, isAdmin = false) =
  * @returns {Object} - Formatted content
  */
 export const formatContentResponse = (item, translations, requestedLang, userPlans = [], isAdmin = false) => {
+  // NEW BUSINESS LOGIC: Compute based on plans array
+  const hasPlans = Array.isArray(item.plans) && item.plans.length > 0;
+  const isPaid = hasPlans;
+  const isInSubscription = hasPlans;
+  const locked = hasPlans && !isAdmin;
+  
   // Check if user has access
   const userHasAccess = isAdmin || hasAccess(userPlans, item.plans);
   
@@ -143,6 +149,10 @@ export const formatContentResponse = (item, translations, requestedLang, userPla
     createdAt: item.createdAt,
     updatedAt: item.updatedAt
   };
+  
+  // Set computed fields
+  content.isPaid = isPaid;
+  content.isInSubscription = isInSubscription;
   
   // Format translations array based on access (single translation based on language)
   if (userHasAccess) {
@@ -161,6 +171,11 @@ export const formatContentResponse = (item, translations, requestedLang, userPla
     if (item.coverImageUrl) {
       content.coverImageUrl = item.coverImageUrl;
     }
+    
+    // Add plans field for admin users only
+    if (isAdmin && item.plans) {
+      content.plans = item.plans;
+    }
   } else {
     // User has no access: return requested translation without content
     content.translations = requestedTranslation ? [{
@@ -170,7 +185,7 @@ export const formatContentResponse = (item, translations, requestedLang, userPla
     }] : [];
     
     // Add locked indicator
-    content.locked = true;
+    content.locked = locked;
   }
   
   return content;
@@ -184,6 +199,11 @@ export const formatContentResponse = (item, translations, requestedLang, userPla
  * @returns {Object} - Formatted admin response
  */
 export const formatAdminResponse = (item, translations) => {
+  // NEW BUSINESS LOGIC: Compute based on plans array
+  const hasPlans = Array.isArray(item.plans) && item.plans.length > 0;
+  const isPaid = hasPlans;
+  const isInSubscription = hasPlans;
+  
   // Format translations as object for admin response
   const translationsObject = {};
   translations.forEach(t => {
@@ -217,8 +237,9 @@ export const formatAdminResponse = (item, translations) => {
   if (item.date) response.date = item.date;
   if (item.isLive !== undefined) response.isLive = item.isLive;
   if (item.price !== undefined) response.price = item.price;
-  if (item.isPaid !== undefined) response.isPaid = item.isPaid;
-  if (item.isInSubscription !== undefined) response.isInSubscription = item.isInSubscription;
+  // Override isPaid and isInSubscription based on plans
+  response.isPaid = isPaid;
+  response.isInSubscription = isInSubscription;
   
   return response;
 };

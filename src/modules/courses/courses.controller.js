@@ -381,7 +381,7 @@ const getCourseById = async (req, res) => {
       return res.status(404).json({ error: 'Course not found.' });
     }
 
-    // 🔐 ONLY THIS CHECK
+    // 🔐 AUTHENTICATION CHECK
     if (course.isPaid && !req.user) {
       return res.status(401).json({
         error: 'Authentication required to access this course'
@@ -407,6 +407,21 @@ const getCourseById = async (req, res) => {
       userPlans,
       isAdminUser
     );
+    
+    // Check if the course is locked and user is not authorized
+    if (content.locked && !isAdminUser) {
+      // Check if user is not subscribed and course requires subscription
+      const hasRequiredAccess = isAdminUser || 
+                               (req.user && req.user.subscriptionPlan && 
+                                course.plans && 
+                                course.plans.includes(req.user.subscriptionPlan));
+      
+      if (!hasRequiredAccess) {
+        return res.status(403).json({
+          error: 'You are not authorized to access this course.'
+        });
+      }
+    }
     
     // Add course-specific fields
     content.price = course.price;

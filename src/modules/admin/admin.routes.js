@@ -81,7 +81,7 @@ const courseCrudRoutes = createCrudRoutes('courses', {
   remove: deleteCourse
 });
 courseCrudRoutes(router);
-
+ 
 const strategyCrudRoutes = createCrudRoutes('strategies', {
   create: createStrategy,
   getAll: getAllStrategies,

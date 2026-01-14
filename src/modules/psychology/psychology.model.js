@@ -14,11 +14,19 @@ const psychologySchema = new mongoose.Schema({
     type: String,
     required: false
   },
+  // NEW FIELD: References to required plans
+  requiredPlans: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Plan' }],
   // Legacy field - kept for backward compatibility
   requiredPlan: {
     type: String,
     enum: ['free', 'pro', 'master', 'otrade'],
     default: 'free'
+  },
+  slug: {
+    type: String,
+    required: false,
+    unique: true,
+    sparse: true
   }
 }, {
   timestamps: true

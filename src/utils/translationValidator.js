@@ -155,7 +155,7 @@ export const handleValidationError = (res, validationResult) => {
  * @returns {Object} - { valid: boolean, error: string|null }
  */
 export const validatePlans = (plans) => {
-  const validPlans = ['free', 'pro', 'master', 'otrade'];
+  const legacyPlans = ['free', 'pro', 'master', 'otrade'];
   
   if (!Array.isArray(plans)) {
     return {
@@ -172,10 +172,11 @@ export const validatePlans = (plans) => {
   }
   
   for (const plan of plans) {
-    if (!validPlans.includes(plan)) {
+    // Check if it's a legacy plan or a new plan key
+    if (!legacyPlans.includes(plan) && typeof plan !== 'string') {
       return {
         valid: false,
-        error: `Invalid plan '${plan}'. Must be one of: ${validPlans.join(', ')}.`
+        error: `Invalid plan '${plan}'. Must be a valid plan string.`
       };
     }
   }

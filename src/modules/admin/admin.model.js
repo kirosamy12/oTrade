@@ -26,6 +26,7 @@ permissions: [
     psychology: [String],
     courses: [String],
     analysis: [String],
+    plans: [String],
     webinars: [String]
   }
 ]

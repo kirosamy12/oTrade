@@ -57,26 +57,30 @@
 /**
  * Check if user has access based on their subscription plans
  * 
- * @param {Array} userPlans - Array of user's subscription plans
- * @param {Array} contentPlans - Array of required plans for content
+ * @param {Array} userPlans - Array of user's subscribed plan IDs
+ * @param {Array} requiredPlanIds - Array of required plan IDs for content
  * @returns {boolean} - True if user has access
  */
-export const hasAccess = (userPlans, contentPlans) => {
+export const hasAccess = (userPlans, requiredPlanIds) => {
   // Admin always has access (handled by middleware)
   // This function checks if user has at least ONE matching plan
   
   if (!userPlans || !Array.isArray(userPlans) || userPlans.length === 0) {
-    // User has no plans, only allow free content
-    return contentPlans && contentPlans.includes('free');
+    // User has no plans, only allow content with no required plans
+    return !requiredPlanIds || !Array.isArray(requiredPlanIds) || requiredPlanIds.length === 0;
   }
   
-  if (!contentPlans || !Array.isArray(contentPlans) || contentPlans.length === 0) {
+  if (!requiredPlanIds || !Array.isArray(requiredPlanIds) || requiredPlanIds.length === 0) {
     // Content has no plan restrictions, allow access
     return true;
   }
   
   // Check if user has at least one matching plan
-  return userPlans.some(userPlan => contentPlans.includes(userPlan));
+  // Convert to string IDs for comparison
+  const userPlanIds = userPlans.map(plan => plan.toString());
+  const requiredPlanIdsStr = requiredPlanIds.map(plan => plan.toString());
+  
+  return userPlanIds.some(userPlanId => requiredPlanIdsStr.includes(userPlanId));
 };
 
 /**
@@ -129,14 +133,14 @@ export const filterContentByAccess = (content, userHasAccess, isAdmin = false) =
  * @returns {Object} - Formatted content
  */
 export const formatContentResponse = (item, translations, requestedLang, userPlans = [], isAdmin = false) => {
-  // NEW BUSINESS LOGIC: Compute based on plans array
-  const hasPlans = Array.isArray(item.plans) && item.plans.length > 0;
-  const isPaid = hasPlans;
-  const isInSubscription = hasPlans;
-  const locked = hasPlans && !isAdmin;
+  // NEW BUSINESS LOGIC: Compute based on requiredPlans array
+  const hasRequiredPlans = Array.isArray(item.requiredPlans) && item.requiredPlans.length > 0;
+  const isPaid = hasRequiredPlans;
+  const isInSubscription = hasRequiredPlans;
+  const locked = hasRequiredPlans && !isAdmin;
   
   // Check if user has access
-  const userHasAccess = isAdmin || hasAccess(userPlans, item.plans);
+  const userHasAccess = isAdmin || hasAccess(userPlans, item.requiredPlans);
   
   // Find the translation matching the requested language, fallback to English
   const requestedTranslation = 
@@ -199,10 +203,10 @@ export const formatContentResponse = (item, translations, requestedLang, userPla
  * @returns {Object} - Formatted admin response
  */
 export const formatAdminResponse = (item, translations) => {
-  // NEW BUSINESS LOGIC: Compute based on plans array
-  const hasPlans = Array.isArray(item.plans) && item.plans.length > 0;
-  const isPaid = hasPlans;
-  const isInSubscription = hasPlans;
+  // NEW BUSINESS LOGIC: Compute based on requiredPlans array
+  const hasRequiredPlans = Array.isArray(item.requiredPlans) && item.requiredPlans.length > 0;
+  const isPaid = hasRequiredPlans;
+  const isInSubscription = hasRequiredPlans;
   
   // Format translations as object for admin response
   const translationsObject = {};
@@ -217,6 +221,7 @@ export const formatAdminResponse = (item, translations) => {
   const response = {
     id: item._id,
     plans: item.plans,
+    requiredPlans: item.requiredPlans, // Include new requiredPlans field
     translations: translationsObject,
     createdAt: item.createdAt,
     updatedAt: item.updatedAt
@@ -237,9 +242,70 @@ export const formatAdminResponse = (item, translations) => {
   if (item.date) response.date = item.date;
   if (item.isLive !== undefined) response.isLive = item.isLive;
   if (item.price !== undefined) response.price = item.price;
-  // Override isPaid and isInSubscription based on plans
+  // Override isPaid and isInSubscription based on requiredPlans
   response.isPaid = isPaid;
   response.isInSubscription = isInSubscription;
+
+  return response;
+};
+
+/**
+ * Format plan response based on Accept-Language header
+ * Returns only the requested translation object
+ * 
+ * @param {Object} plan - Plan document
+ * @param {string} requestedLang - Requested language from Accept-Language header (ar or en)
+ * @returns {Object} - Formatted plan response with single translation
+ */
+export const formatPlanResponse = (plan, requestedLang) => {
+  // Determine the language to use (default to 'en' if requested language is not supported)
+  const lang = ['en', 'ar'].includes(requestedLang) ? requestedLang : 'en';
+  
+  // Extract the requested translation
+  const requestedTranslation = plan.translations[lang];
+  
+  // Create the response object with the single translation
+  const response = {
+    _id: plan._id,
+    key: plan.key,
+    price: plan.price,
+    isActive: plan.isActive,
+    translation: requestedTranslation,
+    allowedContent: plan.allowedContent,
+    // NEW FIELDS: durationType and features
+    durationType: plan.durationType,
+    features: plan.features,
+    // NEW FIELD: subscriptionOptions
+    subscriptionOptions: plan.subscriptionOptions,
+    createdAt: plan.createdAt,
+    updatedAt: plan.updatedAt
+  };
   
   return response;
+};
+
+/**
+ * Check if a user's subscription is active
+ * 
+ * @param {Object} user - User document
+ * @returns {boolean} - True if subscription is active
+ */
+export const isSubscriptionActive = (user) => {
+  if (!user || !user.subscription || !user.subscription.endDate) {
+    // For backward compatibility, check the legacy subscriptionStatus
+    if (user && user.subscriptionStatus === 'active') {
+      // Check if legacy subscription hasn't expired
+      if (user.subscriptionExpiry && new Date(user.subscriptionExpiry) > new Date()) {
+        return true;
+      } else if (!user.subscriptionExpiry) {
+        // If no expiry date, assume active
+        return user.subscriptionStatus === 'active';
+      }
+    }
+    return false;
+  }
+  
+  // Check new subscription system
+  const now = new Date();
+  return user.subscription.endDate > now;
 };

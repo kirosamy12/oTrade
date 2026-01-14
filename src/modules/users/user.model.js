@@ -33,6 +33,15 @@ const userSchema = new mongoose.Schema({
   subscriptionExpiry: {
     type: Date,
     default: null
+  },
+  // New field for plan-based subscriptions
+  subscribedPlans: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Plan' }],
+  // NEW FIELD: subscription information
+  subscription: {
+    plan: { type: mongoose.Schema.Types.ObjectId, ref: 'Plan' },
+    duration: { type: String, enum: ['monthly', 'yearly'] },
+    startDate: Date,
+    endDate: Date
   }
 }, {
   timestamps: true

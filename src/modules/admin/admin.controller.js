@@ -166,9 +166,90 @@ const updateAdmin = async (req, res) => {
       }
       admin.role = role;
     }
-    if (permissions !== undefined) {
-      // Ensure permissions is an array of strings
-      admin.permissions = Array.isArray(permissions) ? permissions : [];
+    // Only update permissions if explicitly provided in the request body
+    // This prevents accidental overwriting of existing permissions with empty array
+    console.log('--- ADMIN UPDATE START ---');
+    console.log('req.body:', JSON.stringify(req.body, null, 2));
+    console.log('permissions in body:', req.body.permissions);
+    console.log('type of permissions:', typeof req.body.permissions);
+    
+    // Normalize permissions: if it's an object, wrap it in an array
+    if ('permissions' in req.body && typeof req.body.permissions === 'object' && !Array.isArray(req.body.permissions)) {
+      req.body.permissions = [req.body.permissions];
+    }
+    
+    if ('permissions' in req.body) {
+      // Validate and set permissions if provided
+      console.log('--- PERMISSIONS VALIDATION START ---');
+      console.log('isArray:', Array.isArray(req.body.permissions));
+      if (Array.isArray(req.body.permissions)) {
+        // Validate that each element in the permissions array is an object with at least one key
+        // and that each property of those objects is an array of strings
+        // Debug logging for each permission object
+        req.body.permissions.forEach((perm, index) => {
+          console.log(`--- Permission Object [${index}] ---`);
+          console.log('value:', perm);
+          console.log('type:', typeof perm);
+          console.log('keys:', Object.keys(perm));
+        });
+        
+        const isValid = req.body.permissions.every((permissionObj, permIndex) => {
+          console.log(`--- Validating Permission Object [${permIndex}] ---`);
+          console.log('value:', permissionObj);
+          console.log('type:', typeof permissionObj);
+          console.log('isArray:', Array.isArray(permissionObj));
+          console.log('isNull:', permissionObj === null);
+          
+          // Check if it's a plain object (not null, not array)
+          if (typeof permissionObj !== 'object' || permissionObj === null || Array.isArray(permissionObj)) {
+            console.log(`Permission [${permIndex}] failed: not a plain object`);
+            return false;
+          }
+          
+          // Check if the object has at least one key
+          const objKeys = Object.keys(permissionObj);
+          console.log(`Permission [${permIndex}] keys:`, objKeys);
+          if (objKeys.length === 0) {
+            console.log(`Permission [${permIndex}] failed: no keys in object`);
+            return false;
+          }
+          
+          // Check that all values in the permission object are arrays of strings
+          const allValid = objKeys.every(key => {
+            const value = permissionObj[key];
+            console.log(`Checking key: ${key}`);
+            console.log('value:', value);
+            console.log('isArray:', Array.isArray(value));
+            console.log('value types:', Array.isArray(value) ? value.map(v => typeof v) : 'N/A');
+            
+            if (!Array.isArray(value)) {
+              console.log(`Key ${key} failed: value is not an array`);
+              return false;
+            }
+            // Check that each element in the arrays are strings
+            const allStrings = value.every(item => typeof item === 'string');
+            if (!allStrings) {
+              console.log(`Key ${key} failed: not all values are strings`);
+            }
+            return allStrings;
+          });
+          
+          console.log(`Permission [${permIndex}] validation result:`, allValid);
+          return allValid;
+        });
+        
+        if (isValid) {
+          console.log('✅ PERMISSIONS VALIDATION PASSED');
+          admin.permissions = req.body.permissions;
+        } else {
+          console.log('❌ PERMISSIONS VALIDATION FAILED');
+          console.log('Final permissions value:', JSON.stringify(req.body.permissions, null, 2));
+          return handleError(res, 400, 'Permissions must be an array of objects where each object property is an array of strings');
+        }
+      } else {
+        // If permissions is not an array but was explicitly sent, return error
+        return handleError(res, 400, 'Permissions must be an array of objects where each object property is an array of strings');
+      }
     }
     if (isActive !== undefined) admin.isActive = isActive;
 

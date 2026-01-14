@@ -1,9 +1,11 @@
 import Course from './course.model.js';
+import Plan from '../plans/plan.model.js';
 import Translation from '../translations/translation.model.js';
 import { createOrUpdateTranslation, getTranslationsByEntity } from '../translations/translation.service.js';
 import { validateTranslationsForCreate, validateContentUrl } from '../../utils/translationValidator.js';
 import { formatAdminResponse, formatContentResponse } from '../../utils/accessControl.js';
 import { uploadImage } from '../../utils/cloudinary.js';
+import { generateSlug } from '../../utils/translationHelper.js';
 import mongoose from 'mongoose';
 
  const createCourse = async (req, res) => {
@@ -111,14 +113,41 @@ import mongoose from 'mongoose';
     /* =========================
         🚀 CREATE COURSE
        ========================= */
-    const course = new Course({ plans, contentUrl, coverImageUrl });
+       
+    // Generate slug from English title if available
+    let slug;
+    const enTitle = en?.title;
+    if (enTitle) {
+      slug = generateSlug(enTitle);
+    }
+    
+    const course = new Course({ plans, contentUrl, coverImageUrl, slug });
     await course.save();
 
     await createOrUpdateTranslation('course', course._id, 'ar', ar.title, ar.description, ar.content);
     await createOrUpdateTranslation('course', course._id, 'en', en.title, en.description, en.content);
 
     const createdTranslations = await getTranslationsByEntity('course', course._id);
+    
+    // Calculate isPaid and isInSubscription flags based on linked plans
+    const plansData = await Promise.all(
+      course.plans.map(key => Plan.findOne({ key: key.toLowerCase() }))
+    );
+    
+    const isInSubscription = plansData.some(plan =>
+      plan?.subscriptionOptions &&
+      (
+        plan.subscriptionOptions.monthly?.price > 0 ||
+        plan.subscriptionOptions.yearly?.price > 0
+      )
+    );
+    
+    const isPaid = plansData.some(plan => plan?.price > 0) || isInSubscription;
+    
     const response = formatAdminResponse(course, createdTranslations);
+    // Override isPaid and isInSubscription with calculated values
+    response.isPaid = isPaid;
+    response.isInSubscription = isInSubscription;
 
     res.status(201).json({
       message: 'Course created successfully',
@@ -249,6 +278,14 @@ const updateCourse = async (req, res) => {
     if (contentUrl !== undefined) course.contentUrl = contentUrl;
     if (coverImageUrl !== undefined) course.coverImageUrl = coverImageUrl;
     
+    // Generate slug from English title if translations are being updated
+    if (translations && Array.isArray(translations)) {
+      const enTranslation = translations.find(t => t.language === 'en');
+      if (enTranslation && enTranslation.title) {
+        course.slug = generateSlug(enTranslation.title);
+      }
+    }
+    
     await course.save();
     
     // Update translations if provided
@@ -267,6 +304,27 @@ const updateCourse = async (req, res) => {
     
     // Fetch updated translations
     const updatedTranslations = await getTranslationsByEntity('course', course._id);
+    
+    // Calculate isPaid and isInSubscription flags based on linked plans
+    if (plans !== undefined) {
+      const plansData = await Promise.all(
+        plans.map(key => Plan.findOne({ key: key.toLowerCase() }))
+      );
+      
+      const isInSubscription = plansData.some(plan =>
+        plan?.subscriptionOptions &&
+        (
+          plan.subscriptionOptions.monthly?.price > 0 ||
+          plan.subscriptionOptions.yearly?.price > 0
+        )
+      );
+      
+      const isPaid = plansData.some(plan => plan?.price > 0) || isInSubscription;
+      
+      // Override isPaid and isInSubscription with calculated values
+      course.isPaid = isPaid;
+      course.isInSubscription = isInSubscription;
+    }
     
     // Return admin response with full data
     const response = formatAdminResponse(course, updatedTranslations);
@@ -317,6 +375,9 @@ const deleteCourse = async (req, res) => {
 const getAllCourses = async (req, res) => {
   try {
     const { type } = req.query;
+    
+    // Get requested language from Accept-Language header, default to 'en'
+    const requestedLang = req.get('Accept-Language') || 'en';
 
     let filter = {};
     if (type) {
@@ -344,7 +405,7 @@ const getAllCourses = async (req, res) => {
         const content = formatContentResponse(
           course,
           translations,
-          req.lang || 'en',
+          requestedLang, // Use requested language from header instead of req.lang
           userPlans,
           isAdmin
         );
@@ -376,15 +437,18 @@ const getCourseById = async (req, res) => {
       return res.status(400).json({ error: 'Invalid course ID.' });
     }
     
+    // Get requested language from Accept-Language header, default to 'en'
+    const requestedLang = req.get('Accept-Language') || 'en';
+    
     const course = await Course.findById(id);
     if (!course) {
       return res.status(404).json({ error: 'Course not found.' });
     }
 
-    // 🔐 AUTHENTICATION CHECK
-    if (course.isPaid && !req.user) {
+    // 🔐 JWT AUTHENTICATION CHECK
+    if (!req.user) {
       return res.status(401).json({
-        error: 'Authentication required to access this course'
+        error: 'Unauthorized'
       });
     }
     
@@ -397,26 +461,25 @@ const getCourseById = async (req, res) => {
     const isAdminUser = isAdmin || isSuperAdmin;
     
     // Get user plans from user object if it exists (regular user)
-    const userPlans = req.user && req.user.subscriptionPlan ? [req.user.subscriptionPlan] : ['free'];
+    // Use the new subscribedPlans field, fallback to legacy subscriptionPlan
+    const userPlans = req.user && req.user.subscribedPlans ? req.user.subscribedPlans : [];
     
     // Use formatContentResponse with access control
     const content = formatContentResponse(
       course,
       translations,
-      req.lang || 'en',
+      requestedLang, // Use requested language from header instead of req.lang
       userPlans,
       isAdminUser
     );
     
-    // Check if the course is locked and user is not authorized
-    if (content.locked && !isAdminUser) {
-      // Check if user is not subscribed and course requires subscription
-      const hasRequiredAccess = isAdminUser || 
-                               (req.user && req.user.subscriptionPlan && 
-                                course.plans && 
-                                course.plans.includes(req.user.subscriptionPlan));
+    // 🔒 LOCKED COURSE ACCESS CHECK
+    if (content.locked === true) {
+      // Check user flags for access
+      const isInSubscription = req.user.subscriptionStatus === 'active';
+      const isPaid = req.user.subscriptionPlan !== 'free';
       
-      if (!hasRequiredAccess) {
+      if (!isInSubscription && !isPaid) {
         return res.status(403).json({
           error: 'You are not authorized to access this course.'
         });

@@ -1,9 +1,11 @@
 import Webinar from './webinar.model.js';
+import Plan from '../plans/plan.model.js';
 import Translation from '../translations/translation.model.js';
 import { createOrUpdateTranslation, getTranslationsByEntity } from '../translations/translation.service.js';
 import { validateTranslationsForCreate, validateContentUrl } from '../../utils/translationValidator.js';
 import { formatAdminResponse, formatContentResponse } from '../../utils/accessControl.js';
 import { uploadImage } from '../../utils/cloudinary.js';
+import { generateSlug } from '../../utils/translationHelper.js';
 import mongoose from 'mongoose';
 
 const createWebinar = async (req, res) => {
@@ -132,6 +134,11 @@ const createWebinar = async (req, res) => {
       plans
     };
     
+    // Generate slug from English title if available
+    if (englishTranslation && englishTranslation.title) {
+      webinarData.slug = generateSlug(englishTranslation.title);
+    }
+    
     // Set date if provided
     if (date !== undefined) {
       webinarData.date = date;
@@ -182,8 +189,26 @@ const createWebinar = async (req, res) => {
     // Fetch created translations for response
     const createdTranslations = await getTranslationsByEntity('webinar', webinar._id);
     
+    // Calculate isPaid and isInSubscription flags based on linked plans
+    const plansData = await Promise.all(
+      webinar.plans.map(key => Plan.findOne({ key: key.toLowerCase() }))
+    );
+    
+    const isInSubscription = plansData.some(plan =>
+      plan?.subscriptionOptions &&
+      (
+        plan.subscriptionOptions.monthly?.price > 0 ||
+        plan.subscriptionOptions.yearly?.price > 0
+      )
+    );
+    
+    const isPaid = plansData.some(plan => plan?.price > 0) || isInSubscription;
+    
     // Return admin response with full data
     const response = formatAdminResponse(webinar, createdTranslations);
+    // Override isPaid and isInSubscription with calculated values
+    response.isPaid = isPaid;
+    response.isInSubscription = isInSubscription;
     
     res.status(201).json({
       message: 'Webinar created successfully.',
@@ -291,6 +316,14 @@ const updateWebinar = async (req, res) => {
     if (contentUrl !== undefined) webinar.contentUrl = contentUrl;
     if (coverImageUrl !== undefined) webinar.coverImageUrl = coverImageUrl;
     
+    // Generate slug from English title if translations are being updated
+    if (translations && Array.isArray(translations)) {
+      const enTranslation = translations.find(t => t.language === 'en');
+      if (enTranslation && enTranslation.title) {
+        webinar.slug = generateSlug(enTranslation.title);
+      }
+    }
+    
     await webinar.save();
     
     // Update translations if provided
@@ -311,6 +344,27 @@ const updateWebinar = async (req, res) => {
     
     // Fetch updated translations for response
     const updatedTranslations = await getTranslationsByEntity('webinar', webinar._id);
+    
+    // Calculate isPaid and isInSubscription flags based on linked plans
+    if (plans !== undefined) {
+      const plansData = await Promise.all(
+        plans.map(key => Plan.findOne({ key: key.toLowerCase() }))
+      );
+      
+      const isInSubscription = plansData.some(plan =>
+        plan?.subscriptionOptions &&
+        (
+          plan.subscriptionOptions.monthly?.price > 0 ||
+          plan.subscriptionOptions.yearly?.price > 0
+        )
+      );
+      
+      const isPaid = plansData.some(plan => plan?.price > 0) || isInSubscription;
+      
+      // Override isPaid and isInSubscription with calculated values
+      webinar.isPaid = isPaid;
+      webinar.isInSubscription = isInSubscription;
+    }
     
     // Return admin response with full data
     const response = formatAdminResponse(webinar, updatedTranslations);
@@ -362,9 +416,13 @@ const getAllWebinars = async (req, res) => {
   try {
     const webinars = await Webinar.find().sort({ createdAt: -1 });
     
+    // Get requested language from Accept-Language header, default to 'en'
+    const requestedLang = req.get('Accept-Language') || 'en';
+    
     // Determine if user is admin (from JWT via middleware)
     const isAdmin = req.user && req.user.role === 'admin';
-    const userPlans = req.user && req.user.subscriptionPlan ? [req.user.subscriptionPlan] : ['free'];
+    // Use the new subscribedPlans field, fallback to legacy subscriptionPlan
+    const userPlans = req.user && req.user.subscribedPlans ? req.user.subscribedPlans : [];
     
     // Get translations for each webinar with access control
     const webinarsWithTranslations = await Promise.all(
@@ -375,7 +433,7 @@ const getAllWebinars = async (req, res) => {
         const content = formatContentResponse(
           webinar,
           translations,
-          req.lang || 'en',
+          requestedLang, // Use requested language from header instead of req.lang
           userPlans,
           isAdmin
         );
@@ -407,6 +465,9 @@ const getWebinarById = async (req, res) => {
       return res.status(400).json({ error: 'Invalid webinar ID.' });
     }
     
+    // Get requested language from Accept-Language header, default to 'en'
+    const requestedLang = req.get('Accept-Language') || 'en';
+    
     const webinar = await Webinar.findById(id);
     if (!webinar) {
       return res.status(404).json({ error: 'Webinar not found.' });
@@ -421,13 +482,14 @@ const getWebinarById = async (req, res) => {
     const isAdminUser = isAdmin || isSuperAdmin;
     
     // Get user plans from user object if it exists (regular user)
-    const userPlans = req.user && req.user.subscriptionPlan ? [req.user.subscriptionPlan] : ['free'];
+    // Use the new subscribedPlans field, fallback to legacy subscriptionPlan
+    const userPlans = req.user && req.user.subscribedPlans ? req.user.subscribedPlans : [];
     
     // Use formatContentResponse with access control
     const content = formatContentResponse(
       webinar,
       translations,
-      req.lang || 'en',
+      requestedLang, // Use requested language from header instead of req.lang
       userPlans,
       isAdminUser
     );

@@ -20,6 +20,14 @@ const webinarSchema = new mongoose.Schema({
   coverImageUrl: {
     type: String,
     required: false
+  },
+  // NEW FIELD: References to required plans
+  requiredPlans: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Plan' }],
+  slug: {
+    type: String,
+    required: false,
+    unique: true,
+    sparse: true
   }
 }, {
   timestamps: true

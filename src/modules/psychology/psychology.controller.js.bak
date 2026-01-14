@@ -1,11 +1,9 @@
 import Psychology from './psychology.model.js';
-import Plan from '../plans/plan.model.js';
 import Translation from '../translations/translation.model.js';
 import { createOrUpdateTranslation, getTranslationsByEntity } from '../translations/translation.service.js';
 import { validateTranslationsForCreate, validateContentUrl } from '../../utils/translationValidator.js';
 import { formatAdminResponse, formatContentResponse } from '../../utils/accessControl.js';
 import { uploadImage } from '../../utils/cloudinary.js';
-import { generateSlug } from '../../utils/translationHelper.js';
 import mongoose from 'mongoose';
 
 const createPsychology = async (req, res) => {
@@ -140,11 +138,6 @@ const createPsychology = async (req, res) => {
       plans
     };
     
-    // Generate slug from English title if available
-    if (englishTranslation && englishTranslation.title) {
-      psychologyData.slug = generateSlug(englishTranslation.title);
-    }
-    
     // Set contentUrl if provided
     if (contentUrl !== undefined) {
       psychologyData.contentUrl = contentUrl;
@@ -185,26 +178,8 @@ const createPsychology = async (req, res) => {
     // Fetch created translations for response
     const createdTranslations = await getTranslationsByEntity('psychology', psychology._id);
     
-    // Calculate isPaid and isInSubscription flags based on linked plans
-    const plansData = await Promise.all(
-      psychology.plans.map(key => Plan.findOne({ key: key.toLowerCase() }))
-    );
-    
-    const isInSubscription = plansData.some(plan =>
-      plan?.subscriptionOptions &&
-      (
-        plan.subscriptionOptions.monthly?.price > 0 ||
-        plan.subscriptionOptions.yearly?.price > 0
-      )
-    );
-    
-    const isPaid = plansData.some(plan => plan?.price > 0) || isInSubscription;
-    
     // Return admin response with full data
     const response = formatAdminResponse(psychology, createdTranslations);
-    // Override isPaid and isInSubscription with calculated values
-    response.isPaid = isPaid;
-    response.isInSubscription = isInSubscription;
     
     res.status(201).json({
       message: 'Psychology article created successfully.',
@@ -326,14 +301,6 @@ const updatePsychology = async (req, res) => {
     if (requiredPlan !== undefined && plans === undefined) psychology.requiredPlan = requiredPlan;
     if (coverImageUrl !== undefined) psychology.coverImageUrl = coverImageUrl;
     
-    // Generate slug from English title if translations are being updated
-    if (translations && Array.isArray(translations)) {
-      const enTranslation = translations.find(t => t.language === 'en');
-      if (enTranslation && enTranslation.title) {
-        psychology.slug = generateSlug(enTranslation.title);
-      }
-    }
-    
     await psychology.save();
     
     // Update translations if provided
@@ -352,27 +319,6 @@ const updatePsychology = async (req, res) => {
     
     // Fetch updated translations for response
     const updatedTranslations = await getTranslationsByEntity('psychology', psychology._id);
-    
-    // Calculate isPaid and isInSubscription flags based on linked plans
-    if (plans !== undefined) {
-      const plansData = await Promise.all(
-        plans.map(key => Plan.findOne({ key: key.toLowerCase() }))
-      );
-      
-      const isInSubscription = plansData.some(plan =>
-        plan?.subscriptionOptions &&
-        (
-          plan.subscriptionOptions.monthly?.price > 0 ||
-          plan.subscriptionOptions.yearly?.price > 0
-        )
-      );
-      
-      const isPaid = plansData.some(plan => plan?.price > 0) || isInSubscription;
-      
-      // Override isPaid and isInSubscription with calculated values
-      psychology.isPaid = isPaid;
-      psychology.isInSubscription = isInSubscription;
-    }
     
     // Return admin response with full data
     const response = formatAdminResponse(psychology, updatedTranslations);
@@ -424,13 +370,9 @@ const getAllPsychology = async (req, res) => {
   try {
     const psychologyArticles = await Psychology.find().sort({ createdAt: -1 });
     
-    // Get requested language from Accept-Language header, default to 'en'
-    const requestedLang = req.get('Accept-Language') || 'en';
-    
     // Determine if user is admin (from JWT via middleware)
     const isAdmin = req.user && req.user.role === 'admin';
-    // Use the new subscribedPlans field, fallback to legacy subscriptionPlan
-    const userPlans = req.user && req.user.subscribedPlans ? req.user.subscribedPlans : [];
+    const userPlans = req.user && req.user.subscriptionPlan ? [req.user.subscriptionPlan] : ['free'];
     
     // Get translations for each psychology article with access control
     const psychologyWithTranslations = await Promise.all(
@@ -441,7 +383,7 @@ const getAllPsychology = async (req, res) => {
         const content = formatContentResponse(
           psychology,
           translations,
-          requestedLang, // Use requested language from header instead of req.lang
+          req.lang || 'en',
           userPlans,
           isAdmin
         );
@@ -471,9 +413,6 @@ const getPsychologyById = async (req, res) => {
       return res.status(400).json({ error: 'Invalid psychology article ID.' });
     }
     
-    // Get requested language from Accept-Language header, default to 'en'
-    const requestedLang = req.get('Accept-Language') || 'en';
-    
     const psychology = await Psychology.findById(id);
     if (!psychology) {
       return res.status(404).json({ error: 'Psychology article not found.' });
@@ -488,14 +427,13 @@ const getPsychologyById = async (req, res) => {
     const isAdminUser = isAdmin || isSuperAdmin;
     
     // Get user plans from user object if it exists (regular user)
-    // Use the new subscribedPlans field, fallback to legacy subscriptionPlan
-    const userPlans = req.user && req.user.subscribedPlans ? req.user.subscribedPlans : [];
+    const userPlans = req.user && req.user.subscriptionPlan ? [req.user.subscriptionPlan] : ['free'];
     
     // Use formatContentResponse with access control
     const content = formatContentResponse(
       psychology,
       translations,
-      requestedLang, // Use requested language from header instead of req.lang
+      req.lang || 'en',
       userPlans,
       isAdminUser
     );

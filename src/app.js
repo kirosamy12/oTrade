@@ -38,6 +38,7 @@ import supportRoutes from './modules/support/support.routes.js';
 import userRoutes from './modules/users/user.routes.js';
 import adminRoutes from './modules/admin/admin.routes.js';
 import calendarRoutes from './modules/calendar/calendar.routes.js';
+import planRoutes from './modules/plans/plan.routes.js';
 
 app.use('/api/auth', authRoutes);
 app.use('/api/admin/subscriptions', subscriptionRoutes);
@@ -51,6 +52,7 @@ app.use('/api/support', supportRoutes);
 app.use('/api/user', userRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/calendar', calendarRoutes);
+app.use('/api/plans', planRoutes);
 
 // Health check endpoint
 app.get('/health', (req, res) => {

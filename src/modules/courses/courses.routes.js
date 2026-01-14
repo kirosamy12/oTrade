@@ -21,4 +21,4 @@ router.put('/updatecourse/:id', authenticate(['admin', 'super_admin']), checkPer
 router.delete('/deletecourse/:id', authenticate(['admin', 'super_admin']), checkPermission('courses', 'delete'), deleteCourse);//done
 router.get('/admin/allcourses', authenticate(['admin', 'super_admin']), checkPermission('courses', 'view'), getAllCourses);//done
 
-export default router; 
+export default router;  

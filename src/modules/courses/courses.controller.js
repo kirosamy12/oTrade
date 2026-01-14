@@ -129,7 +129,31 @@ import mongoose from 'mongoose';
       slug = generateSlug(enTitle);
     }
     
-    const course = new Course({ plans, contentUrl, coverImageUrl, slug });
+    // Calculate isPaid and isInSubscription flags BEFORE saving the course
+    const coursePlansData = await Plan.find({ _id: { $in: plans } });
+    
+    const courseIsInSubscription = coursePlansData.some(plan =>
+      plan?.subscriptionOptions &&
+      (
+        plan.subscriptionOptions.monthly?.price > 0 ||
+        plan.subscriptionOptions.quarterly?.price > 0 ||
+        plan.subscriptionOptions.semiAnnual?.price > 0 ||
+        plan.subscriptionOptions.yearly?.price > 0
+      )
+    );
+    
+    const courseIsPaid = coursePlansData.some(plan => plan?.price > 0) || courseIsInSubscription;
+    
+    console.log('Payment flags calculated:', { isPaid: courseIsPaid, isInSubscription: courseIsInSubscription });
+    
+    const course = new Course({ 
+      plans, 
+      contentUrl, 
+      coverImageUrl, 
+      slug,
+      isPaid: courseIsPaid,
+      isInSubscription: courseIsInSubscription
+    });
     await course.save();
 
     await createOrUpdateTranslation('course', course._id, 'ar', ar.title, ar.description, ar.content);
@@ -151,26 +175,8 @@ import mongoose from 'mongoose';
 
     const createdTranslations = await getTranslationsByEntity('course', course._id);
     
-    // Calculate isPaid and isInSubscription flags based on linked plans
-    const plansData = await Plan.find({ _id: { $in: course.plans } });
-    
-    const isInSubscription = plansData.some(plan =>
-      plan?.subscriptionOptions &&
-      (
-        plan.subscriptionOptions.monthly?.price > 0 ||
-        plan.subscriptionOptions.quarterly?.price > 0 ||
-        plan.subscriptionOptions.semiAnnual?.price > 0 ||
-        plan.subscriptionOptions.yearly?.price > 0
-      )
-    );
-    
-    const isPaid = plansData.some(plan => plan?.price > 0) || isInSubscription;
-    
     const response = formatAdminResponse(course, createdTranslations);
-    // Override isPaid and isInSubscription with calculated values
-    response.isPaid = isPaid;
-    response.isInSubscription = isInSubscription;
-
+    
     res.status(201).json({
       message: 'Course created successfully',
       course: response
@@ -361,9 +367,9 @@ const updateCourse = async (req, res) => {
     
     // Calculate isPaid and isInSubscription flags based on linked plans
     if (plans !== undefined) {
-      const plansData = await Plan.find({ _id: { $in: plans } });
+      const updatePlansData = await Plan.find({ _id: { $in: plans } });
       
-      const isInSubscription = plansData.some(plan =>
+      const updateIsInSubscription = updatePlansData.some(plan =>
         plan?.subscriptionOptions &&
         (
           plan.subscriptionOptions.monthly?.price > 0 ||
@@ -373,11 +379,13 @@ const updateCourse = async (req, res) => {
         )
       );
       
-      const isPaid = plansData.some(plan => plan?.price > 0) || isInSubscription;
+      const updateIsPaid = updatePlansData.some(plan => plan?.price > 0) || updateIsInSubscription;
       
-      // Override isPaid and isInSubscription with calculated values
-      course.isPaid = isPaid;
-      course.isInSubscription = isInSubscription;
+      // Update course with calculated values
+      course.isPaid = updateIsPaid;
+      course.isInSubscription = updateIsInSubscription;
+      
+      console.log('Updated payment flags:', { isPaid: updateIsPaid, isInSubscription: updateIsInSubscription });
     }
     
     // Return admin response with full data

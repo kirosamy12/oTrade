@@ -12,8 +12,16 @@ const authenticate = async (req, res, next) => {
     const token = authHeader.replace('Bearer ', '');
     const decoded = jwt.verify(token, JWT_SECRET);
     
-    // Attach the decoded payload to req.user
-    req.user = decoded;
+    // Unified auth payload structure
+    req.auth = {
+      id: decoded.userId || decoded.id || decoded._id,
+      role: decoded.role,
+      permissions: decoded.permissions || [],
+      type: ['admin', 'super_admin'].includes(decoded.role) ? 'admin' : 'user',
+      subscriptionPlan: decoded.subscriptionPlan,
+      subscriptionExpiry: decoded.subscriptionExpiry
+    };
+    
     next();
   } catch (error) {
     res.status(401).json({ error: 'Invalid or expired token.' });

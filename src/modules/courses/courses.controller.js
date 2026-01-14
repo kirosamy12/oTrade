@@ -498,5 +498,71 @@ const getCourseById = async (req, res) => {
     res.status(500).json({ error: 'Internal server error.' });
   }
 };
+const getFreeCourses = async (req, res) => {
+  try {
+    const requestedLang = req.get('Accept-Language') || 'en';
 
-export { createCourse, updateCourse, deleteCourse, getAllCourses, getCourseById };
+    const courses = await Course.find({ isPaid: false }).sort({ createdAt: -1 });
+
+    const isAdmin =
+      req.user && (req.user.role === 'admin' || req.user.role === 'super_admin');
+
+    const userPlans =
+      req.user && req.user.subscribedPlans ? req.user.subscribedPlans : ['free'];
+
+    const result = await Promise.all(
+      courses.map(async (course) => {
+        const translations = await getTranslationsByEntity('course', course._id);
+
+        return formatContentResponse(
+          course,
+          translations,
+          requestedLang,
+          userPlans,
+          isAdmin
+        );
+      })
+    );
+
+    res.status(200).json({ courses: result });
+  } catch (error) {
+    console.error('Error fetching free courses:', error);
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+};
+
+const getPaidCourses = async (req, res) => {
+  try {
+    const requestedLang = req.get('Accept-Language') || 'en';
+
+    const courses = await Course.find({ isPaid: true }).sort({ createdAt: -1 });
+
+    const isAdmin =
+      req.user && (req.user.role === 'admin' || req.user.role === 'super_admin');
+
+    const userPlans =
+      req.user && req.user.subscribedPlans ? req.user.subscribedPlans : ['free'];
+
+    const result = await Promise.all(
+      courses.map(async (course) => {
+        const translations = await getTranslationsByEntity('course', course._id);
+
+        return formatContentResponse(
+          course,
+          translations,
+          requestedLang,
+          userPlans,
+          isAdmin
+        );
+      })
+    );
+
+    res.status(200).json({ courses: result });
+  } catch (error) {
+    console.error('Error fetching paid courses:', error);
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+};
+
+
+export { createCourse, updateCourse, getFreeCourses,getPaidCourses,deleteCourse, getAllCourses, getCourseById };

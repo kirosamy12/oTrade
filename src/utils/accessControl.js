@@ -133,10 +133,12 @@ export const filterContentByAccess = (content, userHasAccess, isAdmin = false) =
  * @returns {Object} - Formatted content
  */
 export const formatContentResponse = (item, translations, requestedLang, userPlans = [], isAdmin = false) => {
-  // NEW BUSINESS LOGIC: Compute based on requiredPlans array
+  // Use existing isPaid and isInSubscription from the database document
+  const isPaid = item.isPaid;
+  const isInSubscription = item.isInSubscription;
+  
+  // NEW BUSINESS LOGIC: Compute access based on requiredPlans array
   const hasRequiredPlans = Array.isArray(item.requiredPlans) && item.requiredPlans.length > 0;
-  const isPaid = hasRequiredPlans;
-  const isInSubscription = hasRequiredPlans;
   const locked = hasRequiredPlans && !isAdmin;
   
   // Check if user has access
@@ -203,10 +205,9 @@ export const formatContentResponse = (item, translations, requestedLang, userPla
  * @returns {Object} - Formatted admin response
  */
 export const formatAdminResponse = (item, translations) => {
-  // NEW BUSINESS LOGIC: Compute based on requiredPlans array
-  const hasRequiredPlans = Array.isArray(item.requiredPlans) && item.requiredPlans.length > 0;
-  const isPaid = hasRequiredPlans;
-  const isInSubscription = hasRequiredPlans;
+  // Use existing isPaid and isInSubscription from the database document
+  const isPaid = item.isPaid;
+  const isInSubscription = item.isInSubscription;
   
   // Format translations as object for admin response
   const translationsObject = {};
@@ -242,7 +243,7 @@ export const formatAdminResponse = (item, translations) => {
   if (item.date) response.date = item.date;
   if (item.isLive !== undefined) response.isLive = item.isLive;
   if (item.price !== undefined) response.price = item.price;
-  // Override isPaid and isInSubscription based on requiredPlans
+  // Preserve isPaid and isInSubscription from the database document
   response.isPaid = isPaid;
   response.isInSubscription = isInSubscription;
 

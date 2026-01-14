@@ -4,12 +4,14 @@ import { checkPermission } from '../../middlewares/rbac.middleware.js';
 import { detectLanguage } from '../../middlewares/lang.middleware.js';
 import { requirePlan } from '../../middlewares/subscription.middleware.js';
 import upload, { uploadWithOptionalImage } from '../../middlewares/upload.middleware.js';
-import { createCourse, updateCourse, deleteCourse, getAllCourses, getCourseById } from './courses.controller.js';
+import { createCourse, updateCourse, deleteCourse, getAllCourses, getCourseById, getFreeCourses, getPaidCourses } from './courses.controller.js';
 
 const router = express.Router();
 
 // Public routes with language detection
 router.get('/', detectLanguage, getAllCourses);//done           
+router.get('/free', detectLanguage, getFreeCourses);
+router.get('/paid', detectLanguage, getPaidCourses);
 router.get('/:id', detectLanguage, getCourseById);
 
 // Authenticated routes with subscription plan requirements

@@ -16,7 +16,7 @@ const translationSchema = new mongoose.Schema({
 const planSchema = new mongoose.Schema({
   key: {
     type: String,
-    required: true,
+   
     unique: true,
     trim: true,
     lowercase: true

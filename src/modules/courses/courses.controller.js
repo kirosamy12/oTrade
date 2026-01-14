@@ -32,7 +32,15 @@ import mongoose from 'mongoose';
     }
     plans = plans.map(p => p.toString().trim()).filter(Boolean);
     console.log('FINAL PLANS:', plans);
+    
+    // Validate all Plan IDs exist
     if (!plans.length) return res.status(400).json({ error: 'Plans array is required.' });
+    
+    // Fetch all plans to validate existence and get pricing info
+    const fetchedPlans = await Plan.find({ _id: { $in: plans } });
+    if (fetchedPlans.length !== plans.length) {
+      return res.status(400).json({ error: 'One or more Plan IDs are invalid.' });
+    }
 
     /* =========================
         📦 CONTENT URL
@@ -127,17 +135,31 @@ import mongoose from 'mongoose';
     await createOrUpdateTranslation('course', course._id, 'ar', ar.title, ar.description, ar.content);
     await createOrUpdateTranslation('course', course._id, 'en', en.title, en.description, en.content);
 
+    // Link course to plans by adding course ID to each plan's allowedContent.courses
+    if (plans && Array.isArray(plans)) {
+      for (const planId of plans) {
+        const plan = await Plan.findById(planId);
+        if (plan) {
+          // Add course ID to allowedContent.courses if not already present
+          if (!plan.allowedContent.courses.some(courseId => courseId.equals(course._id))) {
+            plan.allowedContent.courses.push(course._id);
+            await plan.save();
+          }
+        }
+      }
+    }
+
     const createdTranslations = await getTranslationsByEntity('course', course._id);
     
     // Calculate isPaid and isInSubscription flags based on linked plans
-    const plansData = await Promise.all(
-      course.plans.map(key => Plan.findOne({ key: key.toLowerCase() }))
-    );
+    const plansData = await Plan.find({ _id: { $in: course.plans } });
     
     const isInSubscription = plansData.some(plan =>
       plan?.subscriptionOptions &&
       (
         plan.subscriptionOptions.monthly?.price > 0 ||
+        plan.subscriptionOptions.quarterly?.price > 0 ||
+        plan.subscriptionOptions.semiAnnual?.price > 0 ||
         plan.subscriptionOptions.yearly?.price > 0
       )
     );
@@ -268,6 +290,9 @@ const updateCourse = async (req, res) => {
       }
     }
     
+    // Store old plans to handle unlinking
+    const oldPlans = [...course.plans];
+    
     // Update course fields
     if (plans !== undefined) {
       if (!Array.isArray(plans) || plans.length === 0) {
@@ -288,6 +313,35 @@ const updateCourse = async (req, res) => {
     
     await course.save();
     
+    // Handle plan linking/unlinking if plans were updated
+    if (plans !== undefined) {
+      // Unlink course from old plans that are no longer associated
+      for (const oldPlanId of oldPlans) {
+        if (!plans.includes(oldPlanId)) {
+          const oldPlan = await Plan.findById(oldPlanId);
+          if (oldPlan) {
+            // Remove course ID from allowedContent.courses
+            oldPlan.allowedContent.courses = oldPlan.allowedContent.courses.filter(
+              courseId => !courseId.equals(course._id)
+            );
+            await oldPlan.save();
+          }
+        }
+      }
+      
+      // Link course to new plans
+      for (const planId of plans) {
+        const plan = await Plan.findById(planId);
+        if (plan) {
+          // Add course ID to allowedContent.courses if not already present
+          if (!plan.allowedContent.courses.some(courseId => courseId.equals(course._id))) {
+            plan.allowedContent.courses.push(course._id);
+            await plan.save();
+          }
+        }
+      }
+    }
+    
     // Update translations if provided
     if (translations && Array.isArray(translations)) {
       for (const translation of translations) {
@@ -307,14 +361,14 @@ const updateCourse = async (req, res) => {
     
     // Calculate isPaid and isInSubscription flags based on linked plans
     if (plans !== undefined) {
-      const plansData = await Promise.all(
-        plans.map(key => Plan.findOne({ key: key.toLowerCase() }))
-      );
+      const plansData = await Plan.find({ _id: { $in: plans } });
       
       const isInSubscription = plansData.some(plan =>
         plan?.subscriptionOptions &&
         (
           plan.subscriptionOptions.monthly?.price > 0 ||
+          plan.subscriptionOptions.quarterly?.price > 0 ||
+          plan.subscriptionOptions.semiAnnual?.price > 0 ||
           plan.subscriptionOptions.yearly?.price > 0
         )
       );

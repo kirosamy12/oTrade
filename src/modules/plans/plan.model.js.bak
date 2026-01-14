@@ -56,14 +56,11 @@ const planSchema = new mongoose.Schema({
   // NEW FIELDS: durationType and features
   durationType: {
     type: String,
-    enum: ['monthly', 'quarterly', 'semiAnnual', 'yearly'],
+    enum: ['monthly', 'quarterly', 'yearly'],
     default: 'monthly'
   },
   features: {
-    type: [{
-      en: String,
-      ar: String
-    }],
+    type: [String],
     default: []
   },
   // NEW FIELD: subscriptionOptions

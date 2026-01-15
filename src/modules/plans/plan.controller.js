@@ -6,6 +6,7 @@ import mongoose from 'mongoose';
  * Create a new plan
  */
 
+
 export const createPlan = async (req, res) => {
   try {
     console.log('=== CREATE PLAN DEBUG START ===');
@@ -13,20 +14,20 @@ export const createPlan = async (req, res) => {
 
     const { price, translations, allowedContent, durationType, features, subscriptionOptions } = req.body;
 
-    // Normalize translations array
+    // Normalize translations
     let normalizedTranslations = [];
     if (Array.isArray(translations)) {
-      normalizedTranslations = translations.map(translation => ({
-        language: translation.language?.toLowerCase()?.trim(),
-        title: translation.title?.trim(),
-        description: translation.description?.trim()
+      normalizedTranslations = translations.map(t => ({
+        language: t.language?.toLowerCase()?.trim(),
+        title: t.title?.trim(),
+        description: t.description?.trim()
       }));
     }
 
     const enTranslation = normalizedTranslations.find(t => t.language === 'en');
     const arTranslation = normalizedTranslations.find(t => t.language === 'ar');
 
-    // ================= AUTO-GENERATE KEY =================
+    // AUTO-GENERATE KEY from English title if not provided
     let finalKey = req.body.key;
     if (!finalKey && enTranslation?.title) {
       finalKey = enTranslation.title
@@ -35,26 +36,30 @@ export const createPlan = async (req, res) => {
         .replace(/\s+/g, '_')
         .replace(/[^a-z0-9_]/g, '');
     }
-    console.log('AUTO GENERATED KEY:', finalKey);
-    // ====================================================
 
-    // Normalize features array
+    // Normalize features
     let normalizedFeatures = [];
     if (Array.isArray(features)) {
-      normalizedFeatures = features.map(feature => ({
-        language: feature.language?.toLowerCase()?.trim(),
-        text: feature.text?.trim()
+      normalizedFeatures = features.map(f => ({
+        language: f.language?.toLowerCase()?.trim(),
+        text: f.text?.trim()
       }));
     }
 
     // Validate subscription options
     let hasValidSubscriptionOptions = false;
-    if (subscriptionOptions) {
-      if (subscriptionOptions.monthly?.price !== undefined) hasValidSubscriptionOptions = true;
-      if (subscriptionOptions.quarterly?.price !== undefined) hasValidSubscriptionOptions = true;
-      if (subscriptionOptions.semiAnnual?.price !== undefined) hasValidSubscriptionOptions = true;
-      if (subscriptionOptions.yearly?.price !== undefined) hasValidSubscriptionOptions = true;
-    }
+    let finalSubscriptionOptions = {};
+    const durations = ['monthly', 'quarterly', 'semiAnnual', 'yearly'];
+
+    durations.forEach(duration => {
+      if (subscriptionOptions?.[duration]?.price !== undefined) {
+        hasValidSubscriptionOptions = true;
+        finalSubscriptionOptions[duration] = {
+          price: subscriptionOptions[duration].price,
+          enabled: true // <-- كل الاشتراكات مفعلة تلقائيًا
+        };
+      }
+    });
 
     const hasPrice = price !== undefined && price !== null && typeof price === 'number';
 
@@ -79,12 +84,10 @@ export const createPlan = async (req, res) => {
       });
     }
 
-    // Check if plan with this key already exists
+    // Check duplicate key
     const existingPlan = await Plan.findOne({ key: finalKey.toLowerCase() });
     if (existingPlan) {
-      return res.status(409).json({
-        error: 'A plan with this key already exists.'
-      });
+      return res.status(409).json({ error: 'A plan with this key already exists.' });
     }
 
     // Format translations
@@ -113,7 +116,7 @@ export const createPlan = async (req, res) => {
       allowedContent: allowedContent || {},
       durationType: durationType || 'monthly',
       features: formattedFeatures,
-      subscriptionOptions: subscriptionOptions || undefined
+      subscriptionOptions: finalSubscriptionOptions
     });
 
     await plan.save();
@@ -129,6 +132,7 @@ export const createPlan = async (req, res) => {
     res.status(500).json({ error: 'Internal server error' });
   }
 };
+
 
 
 /**

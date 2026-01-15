@@ -21,18 +21,22 @@ const adminSchema = new mongoose.Schema({
     enum: ['super_admin', 'admin'],
     default: 'admin'
   },
-permissions: [
-  {
-    psychology: [String],
-    courses: [String],
-    analysis: [String],
-    plans: [String],
-    webinars: [String]
-  }
-]
-
-
-,
+  permissions: [
+    {
+      psychology: [String],
+      courses: [String],
+      analysis: [String],
+      plans: [String],
+      webinars: [String],
+      testimonials: [String],
+      users: [String],
+      admins: [String],
+      subscriptions: [String],
+      support: [String],
+      calendar: [String],
+      strategies: [String]
+    }
+  ],
   isActive: {
     type: Boolean,
     default: true

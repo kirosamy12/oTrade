@@ -9,7 +9,8 @@ const translationSchema = new mongoose.Schema({
       'analysis',
       'webinar',
       'psychology',
-      'analyst'
+      'analyst',
+      'testimonial'
     ],
     required: true
   },

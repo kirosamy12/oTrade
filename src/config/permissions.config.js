@@ -14,7 +14,8 @@ const PERMISSIONS_CONFIG = {
   subscriptions: ['view', 'create', 'update', 'delete'],
   support: ['view', 'create', 'update', 'delete'],
   calendar: ['view', 'create', 'update', 'delete'],
-  strategies: ['view', 'create', 'update', 'delete']
+  strategies: ['view', 'create', 'update', 'delete'],
+  testimonials: ['view', 'create', 'update', 'delete']
 };
 
 export default PERMISSIONS_CONFIG;

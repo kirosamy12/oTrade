@@ -6,6 +6,7 @@ import strategyRoutes from '../modules/strategies/strategies.routes.js';
 import webinarRoutes from '../modules/webinars/webinars.routes.js';
 import analysisRoutes from '../modules/analysis/analysis.routes.js';
 import psychologyRoutes from '../modules/psychology/psychology.routes.js';
+import testimonialRoutes from '../modules/testimonials/testimonials.routes.js';
 
 const router = express.Router();
 
@@ -17,5 +18,6 @@ router.use('/strategies', strategyRoutes);
 router.use('/webinars', webinarRoutes);
 router.use('/analysis', analysisRoutes);
 router.use('/psychology', psychologyRoutes);
+router.use('/testimonials', testimonialRoutes);
 
 export default router;       

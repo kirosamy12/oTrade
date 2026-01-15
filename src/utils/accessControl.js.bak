@@ -235,7 +235,7 @@ export const formatAdminResponse = (item, translations) => {
   // Add contentUrl and coverImageUrl if present
   if (item.contentUrl) {
     response.contentUrl = item.contentUrl;
-  } 
+  }
   if (item.coverImageUrl) {
     response.coverImageUrl = item.coverImageUrl;
   }
@@ -321,4 +321,4 @@ export const isSubscriptionActive = (user) => {
   const now = new Date();
   return user.subscription.endDate > now;
 };
- 
+};

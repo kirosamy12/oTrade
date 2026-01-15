@@ -241,6 +241,22 @@ const updateAdmin = async (req, res) => {
         if (isValid) {
           console.log('✅ PERMISSIONS VALIDATION PASSED');
           admin.permissions = req.body.permissions;
+          
+          // Defensive logging to confirm testimonials permissions exist
+          console.log('--- DEFENSIVE LOGGING ---');
+          console.log('Permissions after assignment:', JSON.stringify(admin.permissions, null, 2));
+          
+          // Check if testimonials permissions exist in the assigned permissions
+          const hasTestimonials = admin.permissions.some(permissionObj => 
+            permissionObj.hasOwnProperty('testimonials')
+          );
+          
+          console.log('Testimonials permissions found in admin:', hasTestimonials);
+          if (hasTestimonials) {
+            const testimonialPerms = admin.permissions.map(obj => obj.testimonials).filter(arr => arr);
+            console.log('Testimonials permissions values:', testimonialPerms);
+          }
+          
         } else {
           console.log('❌ PERMISSIONS VALIDATION FAILED');
           console.log('Final permissions value:', JSON.stringify(req.body.permissions, null, 2));

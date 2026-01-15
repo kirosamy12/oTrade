@@ -5,20 +5,14 @@ import mongoose from 'mongoose';
 /**
  * Create a new plan
  */
+
 export const createPlan = async (req, res) => {
   try {
     console.log('=== CREATE PLAN DEBUG START ===');
     console.log('Original Request Body:', req.body);
-    
-    const { key, price, translations, allowedContent, durationType, features, subscriptionOptions } = req.body;
-    
-    console.log('KEY value:', key);
-    console.log('PRICE value:', price);
-    console.log('TRANSLATIONS value:', translations);
-    console.log('SUBSCRIPTION_OPTIONS value:', subscriptionOptions);
-    console.log('FEATURES value:', features);
-    console.log('IS_ACTIVE value:', req.body.isActive);
-    
+
+    const { price, translations, allowedContent, durationType, features, subscriptionOptions } = req.body;
+
     // Normalize translations array
     let normalizedTranslations = [];
     if (Array.isArray(translations)) {
@@ -27,16 +21,23 @@ export const createPlan = async (req, res) => {
         title: translation.title?.trim(),
         description: translation.description?.trim()
       }));
-      console.log('Normalized Translations:', normalizedTranslations);
     }
-    
-    // Find English and Arabic translations
+
     const enTranslation = normalizedTranslations.find(t => t.language === 'en');
     const arTranslation = normalizedTranslations.find(t => t.language === 'ar');
-    
-    console.log('Found EN translation:', enTranslation);
-    console.log('Found AR translation:', arTranslation);
-    
+
+    // ================= AUTO-GENERATE KEY =================
+    let finalKey = req.body.key;
+    if (!finalKey && enTranslation?.title) {
+      finalKey = enTranslation.title
+        .toLowerCase()
+        .trim()
+        .replace(/\s+/g, '_')
+        .replace(/[^a-z0-9_]/g, '');
+    }
+    console.log('AUTO GENERATED KEY:', finalKey);
+    // ====================================================
+
     // Normalize features array
     let normalizedFeatures = [];
     if (Array.isArray(features)) {
@@ -44,59 +45,22 @@ export const createPlan = async (req, res) => {
         language: feature.language?.toLowerCase()?.trim(),
         text: feature.text?.trim()
       }));
-      console.log('Normalized Features:', normalizedFeatures);
     }
-    
+
     // Validate subscription options
     let hasValidSubscriptionOptions = false;
-    let subscriptionPrices = {};
-    
     if (subscriptionOptions) {
-      console.log('Subscription Options received:', subscriptionOptions);
-      
-      if (subscriptionOptions.monthly && typeof subscriptionOptions.monthly.price === 'number') {
-        subscriptionPrices.monthly = subscriptionOptions.monthly.price;
-        hasValidSubscriptionOptions = true;
-      }
-      console.log('Monthly price validation:', subscriptionOptions.monthly?.price, 'Valid:', hasValidSubscriptionOptions);
-      
-      if (subscriptionOptions.quarterly && typeof subscriptionOptions.quarterly.price === 'number') {
-        subscriptionPrices.quarterly = subscriptionOptions.quarterly.price;
-        hasValidSubscriptionOptions = true;
-      }
-      console.log('Quarterly price validation:', subscriptionOptions.quarterly?.price, 'Valid:', hasValidSubscriptionOptions);
-      
-      if (subscriptionOptions.yearly && typeof subscriptionOptions.yearly.price === 'number') {
-        subscriptionPrices.yearly = subscriptionOptions.yearly.price;
-        hasValidSubscriptionOptions = true;
-      }
-      console.log('Yearly price validation:', subscriptionOptions.yearly?.price, 'Valid:', hasValidSubscriptionOptions);
-      
-      if (subscriptionOptions.semiAnnual && typeof subscriptionOptions.semiAnnual.price === 'number') {
-        subscriptionPrices.semiAnnual = subscriptionOptions.semiAnnual.price;
-        hasValidSubscriptionOptions = true;
-      }
-      console.log('SemiAnnual price validation:', subscriptionOptions.semiAnnual?.price, 'Valid:', hasValidSubscriptionOptions);
+      if (subscriptionOptions.monthly?.price !== undefined) hasValidSubscriptionOptions = true;
+      if (subscriptionOptions.quarterly?.price !== undefined) hasValidSubscriptionOptions = true;
+      if (subscriptionOptions.semiAnnual?.price !== undefined) hasValidSubscriptionOptions = true;
+      if (subscriptionOptions.yearly?.price !== undefined) hasValidSubscriptionOptions = true;
     }
-    
-    // Validate required fields
+
     const hasPrice = price !== undefined && price !== null && typeof price === 'number';
-    console.log('HAS_PRICE check result:', hasPrice, 'Value:', price);
-    
-    console.log('VALIDATION CHECKS:');
-    console.log('- Key exists:', !!key);
-    console.log('- EN translation exists:', !!enTranslation);
-    console.log('- AR translation exists:', !!arTranslation);
-    console.log('- EN translation has title:', !!enTranslation?.title);
-    console.log('- EN translation has description:', !!enTranslation?.description);
-    console.log('- AR translation has title:', !!arTranslation?.title);
-    console.log('- AR translation has description:', !!arTranslation?.description);
-    console.log('- Has price or subscription options:', (hasPrice || hasValidSubscriptionOptions));
-    
-    // Check for missing required fields
+
+    // Validate required fields
     const missingFields = [];
-    
-    if (!key) missingFields.push('key');
+    if (!finalKey) missingFields.push('key');
     if (!enTranslation) missingFields.push('English translation');
     else {
       if (!enTranslation.title) missingFields.push('English title');
@@ -108,72 +72,47 @@ export const createPlan = async (req, res) => {
       if (!arTranslation.description) missingFields.push('Arabic description');
     }
     if (!(hasPrice || hasValidSubscriptionOptions)) missingFields.push('price or subscription options');
-    
+
     if (missingFields.length > 0) {
-      console.log('VALIDATION FAILED - Missing fields:', missingFields);
-      console.log('Returning 400 error');
-      
-      return res.status(400).json({ 
-        error: `Missing required fields: ${missingFields.join(', ')}. Key, price OR subscriptionOptions and both English and Arabic translations (with title and description) are required.` 
+      return res.status(400).json({
+        error: `Missing required fields: ${missingFields.join(', ')}. Key, price OR subscriptionOptions and both English and Arabic translations (with title and description) are required.`
       });
     }
-    
-    console.log('All validations passed - proceeding with plan creation');
-    console.log('=== CREATE PLAN DEBUG END ===');
 
     // Check if plan with this key already exists
-    const existingPlan = await Plan.findOne({ key: key.toLowerCase() });
+    const existingPlan = await Plan.findOne({ key: finalKey.toLowerCase() });
     if (existingPlan) {
-      return res.status(409).json({ 
-        error: 'A plan with this key already exists.' 
+      return res.status(409).json({
+        error: 'A plan with this key already exists.'
       });
     }
 
-    // Convert normalized translations to the expected format for the database
-    const formattedTranslations = {};
-    if (enTranslation) {
-      formattedTranslations.en = {
-        title: enTranslation.title,
-        description: enTranslation.description
-      };
-    }
-    if (arTranslation) {
-      formattedTranslations.ar = {
-        title: arTranslation.title,
-        description: arTranslation.description
-      };
-    }
-    
-    // Convert normalized features to the expected format for the database
+    // Format translations
+    const formattedTranslations = {
+      en: { title: enTranslation.title, description: enTranslation.description },
+      ar: { title: arTranslation.title, description: arTranslation.description }
+    };
+
+    // Format features
     const formattedFeatures = [];
-    if (normalizedFeatures.length > 0) {
-      // Group features by language
-      const englishFeatures = normalizedFeatures.filter(f => f.language === 'en').map(f => f.text);
-      const arabicFeatures = normalizedFeatures.filter(f => f.language === 'ar').map(f => f.text);
-      
-      // Pair features by index
-      const maxLen = Math.max(englishFeatures.length, arabicFeatures.length);
-      for (let i = 0; i < maxLen; i++) {
-        const featureObj = {};
-        if (i < englishFeatures.length) {
-          featureObj.en = englishFeatures[i];
-        }
-        if (i < arabicFeatures.length) {
-          featureObj.ar = arabicFeatures[i];
-        }
-        formattedFeatures.push(featureObj);
-      }
+    const englishFeatures = normalizedFeatures.filter(f => f.language === 'en').map(f => f.text);
+    const arabicFeatures = normalizedFeatures.filter(f => f.language === 'ar').map(f => f.text);
+    const maxLen = Math.max(englishFeatures.length, arabicFeatures.length);
+    for (let i = 0; i < maxLen; i++) {
+      const obj = {};
+      if (i < englishFeatures.length) obj.en = englishFeatures[i];
+      if (i < arabicFeatures.length) obj.ar = arabicFeatures[i];
+      formattedFeatures.push(obj);
     }
 
+    // Create plan
     const plan = new Plan({
-      key: key.toLowerCase(),
+      key: finalKey.toLowerCase(),
       price,
       translations: formattedTranslations,
       allowedContent: allowedContent || {},
-      // NEW FIELDS: durationType and features
       durationType: durationType || 'monthly',
       features: formattedFeatures,
-      // NEW FIELD: subscriptionOptions (optional)
       subscriptionOptions: subscriptionOptions || undefined
     });
 
@@ -183,11 +122,14 @@ export const createPlan = async (req, res) => {
       message: 'Plan created successfully',
       plan
     });
+
+    console.log('=== CREATE PLAN DEBUG END ===');
   } catch (error) {
     console.error('Error creating plan:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 };
+
 
 /**
  * Get all plans

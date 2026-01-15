@@ -8,7 +8,7 @@ const createOrUpdateTranslation = async (entityType, entityId, language, title, 
     }
     
     // Validate entityType
-    const validEntityTypes = ['course', 'strategy', 'analysis', 'webinar', 'psychology', 'analyst'];
+    const validEntityTypes = ['course', 'strategy', 'analysis', 'webinar', 'psychology', 'analyst', 'testimonial'];
     if (!validEntityTypes.includes(entityType)) {
       throw new Error(`Invalid entityType. Must be one of: ${validEntityTypes.join(', ')}`);
     }

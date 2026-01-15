@@ -7,11 +7,12 @@ import {
 } from './testimonials.controller.js';
 import { authenticate, checkPermission } from '../../middlewares/rbac.middleware.js';
 import upload from '../../middlewares/upload.middleware.js';
+import { detectLanguage } from '../../middlewares/lang.middleware.js';
 
 const router = express.Router();
 
 // Public routes
-router.get('/', getAllTestimonials);
+router.get('/', detectLanguage,getAllTestimonials);
 
 // Admin routes
 router.post('/create', 

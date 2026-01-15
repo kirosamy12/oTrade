@@ -16,7 +16,7 @@ const translationSchema = new mongoose.Schema({
 const planSchema = new mongoose.Schema({
   key: {
     type: String,
-   
+    required: true,
     unique: true,
     trim: true,
     lowercase: true
@@ -24,15 +24,24 @@ const planSchema = new mongoose.Schema({
   price: {
     type: Number,
     required: function() {
-      // Only require price if subscriptionOptions is not provided
+      // Only require price if plan is not free AND subscriptionOptions is not provided
       // OR if subscriptionOptions doesn't have any prices
+      if (this.isFree === true) {
+        return false; // Don't require price for free plans
+      }
       return !this.subscriptionOptions ||
         (
           (!this.subscriptionOptions.monthly?.price &&
+          !this.subscriptionOptions.quarterly?.price &&
+          !this.subscriptionOptions.semiAnnual?.price &&
           !this.subscriptionOptions.yearly?.price)
         );
     },
     min: 0
+  }, 
+  isFree: {
+    type: Boolean,
+    default: false
   },
   isActive: {
     type: Boolean,
@@ -56,7 +65,7 @@ const planSchema = new mongoose.Schema({
   // NEW FIELDS: durationType and features
   durationType: {
     type: String,
-    enum: ['monthly', 'quarterly', 'semiAnnual', 'yearly'],
+    enum: ['monthly', 'quarterly', 'semiAnnual', 'yearly', 'lifetime'],
     default: 'monthly'
   },
   features: {

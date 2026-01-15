@@ -5,6 +5,8 @@ import mongoose from 'mongoose';
 /**
  * Create a new plan
  */
+
+
 export const createPlan = async (req, res) => {
   try {
     console.log('=== CREATE PLAN DEBUG START ===');
@@ -150,6 +152,28 @@ export const createPlan = async (req, res) => {
     res.status(500).json({ error: 'Internal server error' });
   }
 };
+    // Only add price for paid plans
+    if (!isFree) {
+      planData.price = price;
+    }
+
+    const plan = new Plan(planData);
+
+    await plan.save();
+
+    res.status(201).json({
+      message: 'Plan created successfully',
+      plan
+    });
+
+    console.log('=== CREATE PLAN DEBUG END ===');
+  } catch (error) {
+    console.error('Error creating plan:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
+
 
 /**
  * Get all plans
@@ -215,13 +239,12 @@ export const updatePlan = async (req, res) => {
     console.log('Request Params:', req.params);
     console.log('Request Body:', req.body);
     
-    const { key, price, translations, isActive, allowedContent, durationType, features, subscriptionOptions, addCourses, removeCourses, isFree } = req.body;
+    const { key, price, translations, isActive, allowedContent, durationType, features, subscriptionOptions, addCourses, removeCourses } = req.body;
     
     console.log('KEY value:', key);
     console.log('PRICE value:', price);
     console.log('TRANSLATIONS value:', translations);
     console.log('SUBSCRIPTION_OPTIONS value:', subscriptionOptions);
-    console.log('IS_FREE value:', isFree);
     console.log('IS_ACTIVE value:', isActive);
     console.log('ADD_COURSES value:', addCourses);
     console.log('REMOVE_COURSES value:', removeCourses);
@@ -254,7 +277,6 @@ export const updatePlan = async (req, res) => {
     if (price !== undefined) updateData.price = price;
     if (translations) updateData.translations = translations;
     if (isActive !== undefined) updateData.isActive = isActive;
-    if (isFree !== undefined) updateData.isFree = isFree;
     
     // Handle allowedContent updates
     if (allowedContent !== undefined) {

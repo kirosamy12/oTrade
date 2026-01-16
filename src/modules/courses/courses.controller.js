@@ -1,7 +1,7 @@
 import Course from './course.model.js';
 import Plan from '../plans/plan.model.js';
 import Translation from '../translations/translation.model.js';
-import { createOrUpdateTranslation, getTranslationsByEntity } from '../translations/translation.service.js';
+import { createOrUpdateTranslation, getTranslationsByEntity,formatContentResponseMultiLang } from '../translations/translation.service.js';
 import { validateTranslationsForCreate, validateContentUrl } from '../../utils/translationValidator.js';
 import { formatAdminResponse, formatContentResponse } from '../../utils/accessControl.js';
 import { uploadImage } from '../../utils/cloudinary.js';
@@ -437,57 +437,57 @@ const deleteCourse = async (req, res) => {
 const getAllCourses = async (req, res) => {
   try {
     const { type } = req.query;
-    
-    // Get requested language from Accept-Language header, default to 'en'
-    const requestedLang = req.get('Accept-Language') || 'en';
 
+    // Accept-Language => مصفوفة لغات (يدعم | , أو مسافات)
+    const requestedLangs = (req.get('Accept-Language') || 'en')
+      .split(/[,|\s]/) // يفصل على , أو | أو مسافة
+      .map(l => l.trim())
+      .filter(Boolean);
+
+    // فلتر حسب نوع الدورة
     let filter = {};
     if (type) {
-      if (type === 'free') {
-        filter.plans = 'free';
-      } else if (type === 'paid') {
-        filter.isPaid = true;
-      } else {
-        return res.status(400).json({ error: 'Type must be either free or paid.' });
-      }
+      if (type === 'free') filter.plans = 'free';
+      else if (type === 'paid') filter.isPaid = true;
+      else return res.status(400).json({ error: 'Type must be either free or paid.' });
     }
 
     const courses = await Course.find(filter).sort({ createdAt: -1 });
 
-    // Determine if user is admin (from JWT via middleware)
+    // صلاحيات المستخدم
     const isAdmin = req.user && (req.user.role === 'admin' || req.user.role === 'super_admin');
     const userPlans = req.user && req.user.subscriptionPlan ? [req.user.subscriptionPlan] : ['free'];
 
-    // Get translations for each course with access control
+    // احضار الترجمات لكل كورس
     const coursesWithTranslations = await Promise.all(
       courses.map(async (course) => {
         const translations = await getTranslationsByEntity('course', course._id);
 
-        // Format response per course
-        const content = formatContentResponse(
+        const content = formatContentResponseMultiLang(
           course,
           translations,
-          requestedLang, // Use requested language from header instead of req.lang
+          requestedLangs,
           userPlans,
           isAdmin
         );
 
-        // Add additional fields
-        if (course.coverImage) content.coverImage = course.coverImage; // Cover image
-        if (course.contentUrl) content.contentUrl = course.contentUrl; // Video / content URL
+        // إضافات بسيطة
+        if (course.coverImage) content.coverImage = course.coverImage;
+        if (course.contentUrl) content.contentUrl = course.contentUrl;
 
         return content;
       })
     );
 
-    res.status(200).json({
-      courses: coursesWithTranslations
-    });
+    res.status(200).json({ courses: coursesWithTranslations });
   } catch (error) {
     console.error('Error fetching courses:', error);
     res.status(500).json({ error: 'Internal server error.' });
   }
 };
+
+
+
 
 
 const getCourseById = async (req, res) => {

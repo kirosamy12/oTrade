@@ -157,23 +157,29 @@ export const createPlan = async (req, res) => {
 export const getAllPlans = async (req, res) => {
   try {
     const { isActive } = req.query;
-    
-    // Get requested language from Accept-Language header, default to 'en'
+
+    // Accept-Language header
     const requestedLang = req.get('Accept-Language') || 'en';
-    
+
     let filter = {};
-    if (isActive !== undefined) {
-      filter.isActive = isActive === 'true';
-    }
+    if (isActive !== undefined) filter.isActive = isActive === 'true';
 
     const plans = await Plan.find(filter).sort({ createdAt: -1 });
-    
-    // Format each plan response based on requested language
-    const formattedPlans = plans.map(plan => formatPlanResponse(plan, requestedLang));
-    
-    res.status(200).json({
-      plans: formattedPlans
+
+    const formattedPlans = plans.map(plan => {
+      if (requestedLang.includes('|')) {
+        // Return all translations
+        return {
+          ...plan.toObject(),
+          translations: plan.translations
+        };
+      } else {
+        // Return requested language only
+        return formatPlanResponse(plan, requestedLang);
+      }
     });
+
+    res.status(200).json({ plans: formattedPlans });
   } catch (error) {
     console.error('Error fetching plans:', error);
     res.status(500).json({ error: 'Internal server error' });
@@ -186,25 +192,48 @@ export const getAllPlans = async (req, res) => {
 export const getPlanById = async (req, res) => {
   try {
     const plan = await Plan.findById(req.params.id);
-    
-    if (!plan) {
-      return res.status(404).json({ error: 'Plan not found.' });
-    }
-    
-    // Get requested language from Accept-Language header, default to 'en'
-    const requestedLang = req.get('Accept-Language') || 'en';
-    
-    // Format the plan response based on requested language
-    const formattedPlan = formatPlanResponse(plan, requestedLang);
+    if (!plan) return res.status(404).json({ error: 'Plan not found.' });
 
-    res.status(200).json({
-      plan: formattedPlan
-    });
+    const requestedLang = req.get('Accept-Language') || 'en';
+
+    let formattedPlan;
+    if (requestedLang.includes('|')) {
+      formattedPlan = { ...plan.toObject(), translations: plan.translations };
+    } else {
+      formattedPlan = formatPlanResponse(plan, requestedLang);
+    }
+
+    res.status(200).json({ plan: formattedPlan });
   } catch (error) {
     console.error('Error fetching plan:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 };
+
+/**
+ * Get plan by key
+ */
+export const getPlanByKey = async (req, res) => {
+  try {
+    const plan = await Plan.findOne({ key: req.params.key.toLowerCase(), isActive: true });
+    if (!plan) return res.status(404).json({ error: 'Plan not found.' });
+
+    const requestedLang = req.get('Accept-Language') || 'en';
+
+    let formattedPlan;
+    if (requestedLang.includes('|')) {
+      formattedPlan = { ...plan.toObject(), translations: plan.translations };
+    } else {
+      formattedPlan = formatPlanResponse(plan, requestedLang);
+    }
+
+    res.status(200).json({ plan: formattedPlan });
+  } catch (error) {
+    console.error('Error fetching plan by key:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
 
 /**
  * Update plan by ID
@@ -369,28 +398,3 @@ export const deletePlan = async (req, res) => {
 /**
  * Get plan by key
  */
-export const getPlanByKey = async (req, res) => {
-  try {
-    const plan = await Plan.findOne({ 
-      key: req.params.key.toLowerCase(), 
-      isActive: true 
-    });
-    
-    if (!plan) {
-      return res.status(404).json({ error: 'Plan not found.' });
-    }
-    
-    // Get requested language from Accept-Language header, default to 'en'
-    const requestedLang = req.get('Accept-Language') || 'en';
-    
-    // Format the plan response based on requested language
-    const formattedPlan = formatPlanResponse(plan, requestedLang);
-
-    res.status(200).json({
-      plan: formattedPlan
-    });
-  } catch (error) {
-    console.error('Error fetching plan by key:', error);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-};

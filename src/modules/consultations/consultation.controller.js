@@ -105,4 +105,26 @@ const createConsultation = async (req, res) => {
   }
 };
 
-export { createConsultation };
+ const getAllConsultations = async (req, res) => {
+  try {
+    const { consultationType } = req.query; // فلترة اختيارية حسب نوع الاستشارة
+
+    let filter = {};
+    if (consultationType) {
+      filter.consultationType = consultationType;
+    }
+
+    // جلب الاستشارات مرتبة من الأحدث للأقدم
+    const consultations = await Consultation.find(filter).sort({ createdAt: -1 });
+
+    res.status(200).json({
+      consultations
+    });
+  } catch (error) {
+    console.error('Error fetching consultations:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
+
+export { createConsultation,getAllConsultations };

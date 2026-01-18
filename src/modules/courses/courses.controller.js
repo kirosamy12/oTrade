@@ -6,8 +6,8 @@ import { validateTranslationsForCreate, validateContentUrl } from '../../utils/t
 import { formatAdminResponse, formatContentResponse } from '../../utils/accessControl.js';
 import { uploadImage } from '../../utils/cloudinary.js';
 import { generateSlug } from '../../utils/translationHelper.js';
-import mongoose from 'mongoose';
-
+import mongoose from 'mongoose'; 
+import slugify from 'slugify';
 
 const createCourse = async (req, res) => {
   try {
@@ -133,16 +133,10 @@ export default createCourse;
 
 
 
- const updateCourse = async (req, res, next) => {
+const updateCourse = async (req, res, next) => {
   try {
     const { id } = req.params;
-
-    const {
-      title,
-      description,
-      content,
-      plans
-    } = req.body;
+    const { title, description, content, plans } = req.body;
 
     const course = await Course.findById(id);
     if (!course) {
@@ -151,6 +145,11 @@ export default createCourse;
         message: 'Course not found'
       });
     }
+
+    // ===== Ensure translations exist =====
+    course.title = course.title || { en: '', ar: '' };
+    course.description = course.description || { en: '', ar: '' };
+    course.content = course.content || { en: '', ar: '' };
 
     // ===== Translations (ar / en) =====
     if (title) {
@@ -200,6 +199,7 @@ export default createCourse;
 };
 
 
+ 
 
  
 const deleteCourse = async (req, res) => {

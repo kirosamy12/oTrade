@@ -134,35 +134,40 @@ export const getAllTestimonials = async (req, res) => {
   try {
     console.log('=== GET ALL TESTIMONIALS DEBUG ===');
     console.log('Query params:', req.query);
-    
-    // Get requested language from Accept-Language header, default to 'en'
-    const requestedLang = req.get('Accept-Language') || 'en';
+
+    // قراءة لغة الهيدر
+    const requestedLang = req.get('Accept-Language'); // ممكن يكون 'en' أو 'ar'
     console.log('Requested language:', requestedLang);
 
-    // Only fetch active testimonials
+    // fetch testimonials المفعلة فقط
     const testimonials = await Testimonial.find({ isActive: true }).sort({ createdAt: -1 });
-
     console.log('Found testimonials:', testimonials.length);
 
-    // Get translations and format response for each testimonial
     const testimonialsWithTranslations = await Promise.all(
       testimonials.map(async (testimonial) => {
         const translations = await getTranslationsByEntity('testimonial', testimonial._id);
-        
-        // Format response per testimonial using formatContentResponse
-        const content = formatContentResponse(
-          testimonial,
-          translations,
-          requestedLang,
-          [], // No user plans needed for public endpoint
-          false // Not admin
-        );
 
-        // Add testimonial-specific fields
-        content.companyName = testimonial.companyName;
-        content.image = testimonial.image;
+        // Format كل الترجمات المتاحة
+        const formattedTranslations = {};
+        translations.forEach(t => {
+          formattedTranslations[t.language] = {
+            title: t.title,
+            description: t.description
+          };
+        });
 
-        return content;
+        // لو الهيدر موجود ورغبة في لغة واحدة فقط
+        let finalTranslations = formattedTranslations;
+        if (requestedLang && formattedTranslations[requestedLang]) {
+          finalTranslations = { [requestedLang]: formattedTranslations[requestedLang] };
+        }
+
+        return {
+          id: testimonial._id,
+          translations: finalTranslations,
+          companyName: testimonial.companyName,
+          image: testimonial.image
+        };
       })
     );
 
@@ -175,6 +180,8 @@ export const getAllTestimonials = async (req, res) => {
     res.status(500).json({ error: 'Internal server error' });
   }
 };
+
+
 
 /**
  * Update testimonial
@@ -297,7 +304,7 @@ export const updateTestimonial = async (req, res) => {
     res.status(500).json({ error: 'Internal server error' });
   }
 };
-
+ 
 /**
  * Delete testimonial
  * DELETE /api/testimonials/delete/:id

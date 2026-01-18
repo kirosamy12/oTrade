@@ -1,3 +1,5 @@
+import Plan from '../modules/plans/plan.model.js';
+
 /**
  * Access Control Utilities
  * Handles plan-based access control and content filtering
@@ -53,6 +55,27 @@
  *   }
  * }
  */
+
+/**
+ * Check if user has access to a psychology item based on Plan system
+ * 
+ * @param {Array} userPlanIds - Array of user's subscribed plan IDs
+ * @param {string} psychologyId - Psychology item ID to check access for
+ * @returns {Promise<boolean>} - True if user has access
+ */
+export const canAccessPsychology = async (userPlanIds, psychologyId) => {
+  if (!userPlanIds || !Array.isArray(userPlanIds) || userPlanIds.length === 0) {
+    return false;
+  }
+  
+  // Check if any of the user's plans include this psychology item
+  const userPlans = await Plan.find({
+    _id: { $in: userPlanIds },
+    'allowedContent.psychology': psychologyId
+  });
+  
+  return userPlans.length > 0;
+};
 
 /**
  * Check if user has access based on their subscription plans
@@ -118,6 +141,69 @@ export const filterContentByAccess = (content, userHasAccess, isAdmin = false) =
   delete lockedContent.content;
   
   return lockedContent;
+};
+
+/**
+ * Format psychology content for API response with Plan-based access control
+ * Handles translation extraction and access control based on Plan system
+ * 
+ * @param {Object} psychology - Psychology document
+ * @param {Array} translations - Translation objects
+ * @param {string} requestedLang - Requested language from Accept-Language header
+ * @param {Array} userPlanIds - User's subscribed plan IDs
+ * @param {boolean} isAdmin - Whether requester is admin
+ * @returns {Promise<Object>} - Formatted content
+ */
+export const formatPsychologyContentResponse = async (psychology, translations, requestedLang, userPlanIds = [], isAdmin = false) => {
+  // Check if user has access based on Plan system
+  const userHasAccess = isAdmin || await canAccessPsychology(userPlanIds, psychology._id);
+  
+  // Find the translation matching the requested language, fallback to English
+  const requestedTranslation = 
+    translations.find(t => t.language === requestedLang) ||
+    translations.find(t => t.language === 'en');
+  
+  // Base content object
+  const content = {
+    id: psychology._id,
+    createdAt: psychology.createdAt,
+    updatedAt: psychology.updatedAt
+  };
+  
+  // Add key field
+  if (psychology.key) content.key = psychology.key;
+  
+  // Format translations array based on access
+  if (userHasAccess) {
+    // User has access: return requested translation with full content
+    content.translations = requestedTranslation ? [{
+      language: requestedTranslation.language,
+      title: requestedTranslation.title,
+      description: requestedTranslation.description,
+      content: requestedTranslation.content
+    }] : [];
+    
+    // Add content fields if present
+    if (psychology.contentUrl) content.contentUrl = psychology.contentUrl;
+    if (psychology.coverImageUrl) content.coverImageUrl = psychology.coverImageUrl;
+    if (psychology.fileUrl) content.fileUrl = psychology.fileUrl;
+    if (psychology.videoUrl) content.videoUrl = psychology.videoUrl;
+    
+    // Add plans field for admin users only
+    if (isAdmin && psychology.plans) content.plans = psychology.plans;
+  } else {
+    // User has no access: return requested translation without content
+    content.translations = requestedTranslation ? [{
+      language: requestedTranslation.language,
+      title: requestedTranslation.title,
+      description: requestedTranslation.description
+    }] : [];
+    
+    // Add locked indicator
+    content.locked = true;
+  }
+  
+  return content;
 };
 
 /**

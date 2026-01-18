@@ -18,8 +18,8 @@ router.get('/:id', getPartnerById);
 
 // Admin routes for managing partners
 //Note: In a real application, you'd want to add authentication middleware
-router.post('/create', authenticate(['admin', 'super_admin']), checkPermission('partners', 'create'), createPartner);
-router.patch('/update/:id', authenticate(['admin', 'super_admin']), checkPermission('partners', 'update'), updatePartner);
+router.post('/create', authenticate(['admin', 'super_admin']), checkPermission('partners', 'create'), upload.fields([{ name: 'logo', maxCount: 1 }]), createPartner);
+router.patch('/update/:id', authenticate(['admin', 'super_admin']), checkPermission('partners', 'update'), upload.fields([{ name: 'logo', maxCount: 1 }]), updatePartner);
 router.delete('/delete/:id', authenticate(['admin', 'super_admin']), checkPermission('partners', 'delete'), deletePartner);
 
 // For now, using direct routes with upload middleware (you may want to add auth middleware later)

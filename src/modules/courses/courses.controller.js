@@ -8,369 +8,73 @@ import { uploadImage } from '../../utils/cloudinary.js';
 import { generateSlug } from '../../utils/translationHelper.js';
 import mongoose from 'mongoose';
 
- const createCourse = async (req, res) => {
+
+const createCourse = async (req, res) => {
   try {
-    console.log('\n================ CREATE COURSE DEBUG =================');
-    console.log('Content-Type:', req.headers['content-type']);
+    console.log('\n===== CREATE COURSE DEBUG =====');
     console.log('BODY:', req.body);
-    console.log('BODY KEYS:', Object.keys(req.body));
     console.log('FILES:', req.files);
-    console.log('======================================================\n');
+    console.log('================================\n');
+
+    // ===== Free logic =====
+    const isFree = req.body.isFree === true || req.body.isFree === 'true';
  
     let plans = [];
     let contentUrl;
     let coverImageUrl;
     let translations = [];
+ 
+    // ===== Plans logic =====
+    if (!isFree) {
+      if (req.body.plans) plans = Array.isArray(req.body.plans) ? req.body.plans : [req.body.plans];
+      else if (req.body['plans[]']) plans = Array.isArray(req.body['plans[]']) ? req.body['plans[]'] : [req.body['plans[]']];
 
-    /* =========================
-        ✅ HANDLE PLANS
-       ========================= */
-    if (req.body.plans) {
-      plans = Array.isArray(req.body.plans) ? req.body.plans : [req.body.plans];
-    } else if (req.body['plans[]']) {
-      plans = Array.isArray(req.body['plans[]']) ? req.body['plans[]'] : [req.body['plans[]']];
-    }
-    plans = plans.map(p => p.toString().trim()).filter(Boolean);
-    console.log('FINAL PLANS:', plans);
-    
-    // Validate all Plan IDs exist
-    if (!plans.length) return res.status(400).json({ error: 'Plans array is required.' });
-    
-    // Fetch all plans to validate existence and get pricing info
-    const fetchedPlans = await Plan.find({ _id: { $in: plans } });
-    if (fetchedPlans.length !== plans.length) {
-      return res.status(400).json({ error: 'One or more Plan IDs are invalid.' });
+      plans = plans.map(p => p.toString().trim()).filter(Boolean);
+
+      if (!plans.length) return res.status(400).json({ error: 'Plans are required when course is not free' });
+
+      const fetchedPlans = await Plan.find({ _id: { $in: plans } });
+      if (fetchedPlans.length !== plans.length) return res.status(400).json({ error: 'Invalid Plan ID found' });
     }
 
-    /* =========================
-        📦 CONTENT URL
-       ========================= */
+    // ===== Content URL =====
     contentUrl = req.body.contentUrl?.trim();
     if (contentUrl) {
       const urlValidation = validateContentUrl(contentUrl);
       if (!urlValidation.valid) return res.status(400).json({ error: urlValidation.error });
     }
 
-    /* =========================
-        🖼️ COVER IMAGE
-       ========================= */
+    // ===== Cover Image =====
     if (req.files?.coverImage) {
-      // Upload directly from memory buffer
-      const coverImageFile = req.files.coverImage[0];
-      coverImageUrl = await uploadImage(coverImageFile, 'courses');
+      coverImageUrl = await uploadImage(req.files.coverImage[0], 'courses');
     } else if (req.body.coverImageUrl?.startsWith('data:image')) {
       coverImageUrl = await uploadImage(req.body.coverImageUrl, 'courses');
     } else {
-      coverImageUrl = req.body.coverImageUrl;
+      coverImageUrl = req.body.coverImageUrl || '';
     }
 
-    /* =========================
-        🌍 TRANSLATIONS
-       ========================= */
-    if (req.body.translations) {
-      try {
-        translations = typeof req.body.translations === 'string'
-          ? JSON.parse(req.body.translations)
-          : req.body.translations;
-      } catch {
-        translations = [];
-      }
-    } else {
-      // Handle nested objects: title, description, content
-      const titles = req.body.title || {};
-      const descriptions = req.body.description || {};
-      const contents = req.body.content || {};
+    // ===== Translations =====
+    const titles = req.body.title || {};
+    const descriptions = req.body.description || {};
+    const contents = req.body.content || {};
 
-      if (titles.en || descriptions.en || contents.en) {
-        translations.push({
-          language: 'en',
-          title: titles.en?.trim() || '',
-          description: descriptions.en?.trim() || '',
-          content: contents.en?.trim() || ''
-        });
-      }
+    if (titles.en || descriptions.en || contents.en) translations.push({ language: 'en', title: titles.en || '', description: descriptions.en || '', content: contents.en || '' });
+    if (titles.ar || descriptions.ar || contents.ar) translations.push({ language: 'ar', title: titles.ar || '', description: descriptions.ar || '', content: contents.ar || '' });
 
-      if (titles.ar || descriptions.ar || contents.ar) {
-        translations.push({
-          language: 'ar',
-          title: titles.ar?.trim() || '',
-          description: descriptions.ar?.trim() || '',
-          content: contents.ar?.trim() || ''
-        });
-      }
-    }
-
-    console.log('PROCESSED TRANSLATIONS:', translations);
-
-    // Lowercase language to avoid mismatch (AR/En/ar)
-    const processedTranslations = translations.map(t => ({
-      language: t.language?.toLowerCase().trim(),
-      title: t.title || '',
-      description: t.description || '',
-      content: t.content || ''
-    }));
-
-    /* =========================
-        ✅ VALIDATE TRANSLATIONS
-       ========================= */
-    const validation = validateTranslationsForCreate(processedTranslations);
+    const validation = validateTranslationsForCreate(translations);
     if (!validation.valid) return res.status(400).json({ error: validation.error });
 
-    const { ar, en } = validation.data;
+    const { en, ar } = validation.data;
+    const slug = en?.title ? generateSlug(en.title) : undefined;
 
-    /* =========================
-        🚀 CREATE COURSE
-       ========================= */
-       
-    // Generate slug from English title if available
-    let slug;
-    const enTitle = en?.title;
-    if (enTitle) {
-      slug = generateSlug(enTitle);
-    }
-    
-    // Calculate isPaid and isInSubscription flags BEFORE saving the course
-    const coursePlansData = await Plan.find({ _id: { $in: plans } });
-    
-    const courseIsInSubscription = coursePlansData.some(plan =>
-      plan?.subscriptionOptions &&
-      (
-        plan.subscriptionOptions.monthly?.price > 0 ||
-        plan.subscriptionOptions.quarterly?.price > 0 ||
-        plan.subscriptionOptions.semiAnnual?.price > 0 ||
-        plan.subscriptionOptions.yearly?.price > 0
-      )
-    );
-    
-    const courseIsPaid = coursePlansData.some(plan => plan?.price > 0) || courseIsInSubscription;
-    
-    console.log('Payment flags calculated:', { isPaid: courseIsPaid, isInSubscription: courseIsInSubscription });
-    
-    const course = new Course({ 
-      plans, 
-      contentUrl, 
-      coverImageUrl, 
-      slug,
-      isPaid: courseIsPaid,
-      isInSubscription: courseIsInSubscription
-    });
-    await course.save();
+    // ===== Payment flags =====
+    let isPaid = false;
+    let isInSubscription = false;
 
-    await createOrUpdateTranslation('course', course._id, 'ar', ar.title, ar.description, ar.content);
-    await createOrUpdateTranslation('course', course._id, 'en', en.title, en.description, en.content);
-
-    // Link course to plans by adding course ID to each plan's allowedContent.courses
-    if (plans && Array.isArray(plans)) {
-      for (const planId of plans) {
-        const plan = await Plan.findById(planId);
-        if (plan) {
-          // Add course ID to allowedContent.courses if not already present
-          if (!plan.allowedContent.courses.some(courseId => courseId.equals(course._id))) {
-            plan.allowedContent.courses.push(course._id);
-            await plan.save();
-          }
-        }
-      }
-    }
-
-    const createdTranslations = await getTranslationsByEntity('course', course._id);
-    
-    const response = formatAdminResponse(course, createdTranslations);
-    
-    res.status(201).json({
-      message: 'Course created successfully',
-      course: response
-    });
-
-  } catch (error) {
-    console.error('❌ CREATE COURSE ERROR:', error);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-};
-
-
-
-
-
-
-
-const updateCourse = async (req, res) => {
-  try {
-    const { id } = req.params;
-    
-    // Validate ObjectId
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({ error: 'Invalid course ID.' });
-    }
-    
-    // Find course
-    const course = await Course.findById(id);
-    if (!course) {
-      return res.status(404).json({ error: 'Course not found.' });
-    }
-    
-    // Handle FormData request
-    let plans, contentUrl, coverImageUrl, translations;
-    
-    if (req.files && req.files.coverImage) {
-      // FormData with file upload
-      const coverImageFile = req.files.coverImage[0];
-      
-      // Parse plans from FormData (handle both single value, array, and multiple entries like plans[])
-      if (req.body.plans !== undefined) {
-        if (Array.isArray(req.body.plans)) {
-          // Handle multiple plans[] entries or already formed array
-          plans = req.body.plans.filter(p => p !== ''); // Remove empty values
-        } else {
-          // Handle single plan value
-          plans = [req.body.plans].filter(p => p !== ''); // Remove empty values
-        }
-      } else if (req.body['plans[]'] !== undefined) {
-        // Handle case where plans are sent as 'plans[]' in FormData
-        if (Array.isArray(req.body['plans[]'])) {
-          plans = req.body['plans[]'].filter(p => p !== ''); // Remove empty values
-        } else {
-          plans = [req.body['plans[]']].filter(p => p !== ''); // Remove empty values
-        }
-      }
-      
-      // Parse contentUrl if provided
-      contentUrl = req.body.contentUrl;
-      
-      // Parse translations from FormData
-      if (req.body.translations) {
-        if (typeof req.body.translations === 'string') {
-          try {
-            // If it's a JSON string, parse it
-            translations = JSON.parse(req.body.translations);
-          } catch (e) {
-            // If it's not a JSON string, it might be individual translation fields
-            translations = [];
-            // Look for translation fields like translations[0], translations[1], etc.
-            Object.keys(req.body).forEach(key => {
-              if (key.startsWith('translations[')) {
-                try {
-                  const translation = JSON.parse(req.body[key]);
-                  translations.push(translation);
-                } catch (e) {
-                  // Ignore invalid translation strings
-                }
-              }
-            });
-          }
-        } else {
-          translations = req.body.translations;
-        }
-      }
-      
-      // Upload cover image to Cloudinary
-      if (coverImageFile) {
-        try {
-          coverImageUrl = await uploadImage(coverImageFile, 'courses');
-          // With memory storage, no temporary file cleanup needed
-        } catch (uploadError) {
-          console.error('Error uploading cover image:', uploadError);
-          return res.status(400).json({ error: 'Failed to upload cover image' });
-        }
-      }
-    } else {
-      // Regular JSON request
-      ({ plans, contentUrl, coverImageUrl, translations } = req.body);
-      
-      // Validate contentUrl if provided
-      if (contentUrl) {
-        const urlValidation = validateContentUrl(contentUrl);
-        if (!urlValidation.valid) {
-          return res.status(400).json({ error: urlValidation.error });
-        }
-      }
-      
-      // Handle cover image upload if provided as base64
-      if (coverImageUrl && coverImageUrl.startsWith('data:image')) {
-        try {
-          coverImageUrl = await uploadImage(coverImageUrl, 'courses');
-        } catch (uploadError) {
-          console.error('Error uploading cover image:', uploadError);
-          return res.status(400).json({ error: 'Failed to upload cover image' });
-        }
-      }
-    }
-    
-    // Store old plans to handle unlinking
-    const oldPlans = [...course.plans];
-    
-    // Update course fields
-    if (plans !== undefined) {
-      if (!Array.isArray(plans) || plans.length === 0) {
-        return res.status(400).json({ error: 'Plans array is required and cannot be empty.' });
-      }
-      course.plans = plans;
-    }
-    if (contentUrl !== undefined) course.contentUrl = contentUrl;
-    if (coverImageUrl !== undefined) course.coverImageUrl = coverImageUrl;
-    
-    // Generate slug from English title if translations are being updated
-    if (translations && Array.isArray(translations)) {
-      const enTranslation = translations.find(t => t.language === 'en');
-      if (enTranslation && enTranslation.title) {
-        course.slug = generateSlug(enTranslation.title);
-      }
-    }
-    
-    await course.save();
-    
-    // Handle plan linking/unlinking if plans were updated
-    if (plans !== undefined) {
-      // Unlink course from old plans that are no longer associated
-      for (const oldPlanId of oldPlans) {
-        if (!plans.includes(oldPlanId)) {
-          const oldPlan = await Plan.findById(oldPlanId);
-          if (oldPlan) {
-            // Remove course ID from allowedContent.courses
-            oldPlan.allowedContent.courses = oldPlan.allowedContent.courses.filter(
-              courseId => !courseId.equals(course._id)
-            );
-            await oldPlan.save();
-          }
-        }
-      }
-      
-      // Link course to new plans
-      for (const planId of plans) {
-        const plan = await Plan.findById(planId);
-        if (plan) {
-          // Add course ID to allowedContent.courses if not already present
-          if (!plan.allowedContent.courses.some(courseId => courseId.equals(course._id))) {
-            plan.allowedContent.courses.push(course._id);
-            await plan.save();
-          }
-        }
-      }
-    }
-    
-    // Update translations if provided
-    if (translations && Array.isArray(translations)) {
-      for (const translation of translations) {
-        await createOrUpdateTranslation(
-          'course',
-          course._id,
-          translation.language,
-          translation.title,
-          translation.description,
-          translation.content
-        );
-      }
-    }
-    
-    // Fetch updated translations
-    const updatedTranslations = await getTranslationsByEntity('course', course._id);
-    
-    // Calculate isPaid and isInSubscription flags based on linked plans
-    if (plans !== undefined) {
-      const updatePlansData = await Plan.find({ _id: { $in: plans } });
-      
-      const updateIsInSubscription = updatePlansData.some(plan =>
-        plan?.subscriptionOptions &&
+    if (!isFree) {
+      const plansData = await Plan.find({ _id: { $in: plans } });
+      isInSubscription = plansData.some(plan =>
+        plan.subscriptionOptions &&
         (
           plan.subscriptionOptions.monthly?.price > 0 ||
           plan.subscriptionOptions.quarterly?.price > 0 ||
@@ -378,29 +82,126 @@ const updateCourse = async (req, res) => {
           plan.subscriptionOptions.yearly?.price > 0
         )
       );
-      
-      const updateIsPaid = updatePlansData.some(plan => plan?.price > 0) || updateIsInSubscription;
-      
-      // Update course with calculated values
-      course.isPaid = updateIsPaid;
-      course.isInSubscription = updateIsInSubscription;
-      
-      console.log('Updated payment flags:', { isPaid: updateIsPaid, isInSubscription: updateIsInSubscription });
+      isPaid = plansData.some(plan => plan.price > 0) || isInSubscription;
     }
-    
-    // Return admin response with full data
-    const response = formatAdminResponse(course, updatedTranslations);
-    
-    res.status(200).json({
-      message: 'Course updated successfully.',
+
+    // ===== Create Course =====
+    const course = new Course({
+      isFree,
+      plans: isFree ? [] : plans,
+      contentUrl,
+      coverImageUrl,
+      slug,
+      isPaid,
+      isInSubscription
+    });
+
+    await course.save();
+
+    // ===== Save translations =====
+    await createOrUpdateTranslation('course', course._id, 'en', en.title, en.description, en.content);
+    await createOrUpdateTranslation('course', course._id, 'ar', ar.title, ar.description, ar.content);
+
+    // ===== Link course to plans =====
+    if (!isFree) {
+      for (const planId of plans) {
+        const plan = await Plan.findById(planId);
+        if (plan && !plan.allowedContent.courses.includes(course._id)) {
+          plan.allowedContent.courses.push(course._id);
+          await plan.save();
+        }
+      }
+    }
+
+    const createdTranslations = await getTranslationsByEntity('course', course._id);
+    const response = formatAdminResponse(course, createdTranslations);
+
+    res.status(201).json({
+      message: 'Course created successfully',
       course: response
     });
+
   } catch (error) {
-    console.error('Error updating course:', error);
-    res.status(500).json({ error: 'Internal server error.' });
+    console.error('CREATE COURSE ERROR:', error);
+    res.status(500).json({ error: 'Internal server error' });
   }
 };
 
+export default createCourse;
+
+
+
+
+
+ const updateCourse = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+
+    const {
+      title,
+      description,
+      content,
+      plans
+    } = req.body;
+
+    const course = await Course.findById(id);
+    if (!course) {
+      return res.status(404).json({
+        success: false,
+        message: 'Course not found'
+      });
+    }
+
+    // ===== Translations (ar / en) =====
+    if (title) {
+      if (title.en) course.title.en = title.en;
+      if (title.ar) course.title.ar = title.ar;
+    }
+
+    if (description) {
+      if (description.en) course.description.en = description.en;
+      if (description.ar) course.description.ar = description.ar;
+    }
+
+    if (content) {
+      if (content.en) course.content.en = content.en;
+      if (content.ar) course.content.ar = content.ar;
+    }
+
+    // ===== Slug auto-generate from EN title =====
+    if (title?.en) {
+      course.slug = slugify(title.en, {
+        lower: true,
+        strict: true
+      });
+    }
+
+    // ===== Plans (array of plan IDs) =====
+    if (plans && Array.isArray(plans)) {
+      course.plans = plans;
+    }
+
+    // ===== File / Image =====
+    if (req.file) {
+      course.image = req.file.path;
+    }
+
+    await course.save();
+
+    res.status(200).json({
+      success: true,
+      message: 'Course updated successfully',
+      data: course
+    });
+
+  } catch (error) {
+    next(error);
+  }
+};
+
+
+
+ 
 const deleteCourse = async (req, res) => {
   try {
     const { id } = req.params;

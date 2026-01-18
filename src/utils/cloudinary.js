@@ -103,4 +103,57 @@ const extractPublicId = (url) => {
   return null;
 };
 
-export { uploadImage, deleteImage, extractPublicId };
+const uploadFile = async (fileSource, folder = 'files') => {
+  try {
+    // Handle different input types
+    const uploadOptions = {
+      folder: folder,
+      resource_type: 'raw'  // Use 'raw' for general file uploads
+    };
+
+    if (typeof fileSource === 'string') {
+      // Handle file path
+      const result = await cloudinary.v2.uploader.upload(fileSource, uploadOptions);
+      return result.secure_url;
+    } else if (fileSource instanceof Buffer) {
+      // Handle buffer from memory storage using promise wrapper
+      return new Promise((resolve, reject) => {
+        const stream = cloudinary.v2.uploader.upload_stream(
+          uploadOptions,
+          (error, result) => {
+            if (error) {
+              console.error('Error uploading buffer to Cloudinary:', error);
+              reject(new Error('Failed to upload file to Cloudinary'));
+            } else {
+              resolve(result.secure_url);
+            }
+          }
+        );
+        stream.end(fileSource);
+      });
+    } else if (fileSource && typeof fileSource === 'object' && fileSource.buffer) {
+      // Handle multer file object with buffer
+      return new Promise((resolve, reject) => {
+        const stream = cloudinary.v2.uploader.upload_stream(
+          uploadOptions,
+          (error, result) => {
+            if (error) {
+              console.error('Error uploading buffer to Cloudinary:', error);
+              reject(new Error('Failed to upload file to Cloudinary'));
+            } else {
+              resolve(result.secure_url);
+            }
+          }
+        );
+        stream.end(fileSource.buffer);
+      });
+    } else {
+      throw new Error('Invalid file source provided');
+    }
+  } catch (error) {
+    console.error('Error uploading file to Cloudinary:', error);
+    throw new Error('Failed to upload file to Cloudinary');
+  }
+};
+
+export { uploadImage, uploadFile, deleteImage, extractPublicId };

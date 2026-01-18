@@ -1,26 +1,48 @@
 import mongoose from 'mongoose';
 
 const psychologySchema = new mongoose.Schema({
+  // Content type key (book, video, article)
+  key: {
+    type: String,
+    required: [true, 'Key is required'],
+    enum: {
+      values: ['book', 'video', 'article'],
+      message: 'Key must be one of: book, video, article'
+    }
+  },
+  
+  // Common fields for all types
   plans: {
     type: [String],
-    enum: ['free', 'pro', 'master', 'otrade'],
-    default: ['free']
+    required: [true, 'Plans array is required']
   },
-  contentUrl: {
-    type: String,
-    required: false
+  isActive: {
+    type: Boolean,
+    default: true
   },
   coverImageUrl: {
     type: String,
     required: false
   },
-  // NEW FIELD: References to required plans
-  requiredPlans: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Plan' }],
-  // Legacy field - kept for backward compatibility
-  requiredPlan: {
+  
+  // Type-specific fields
+  fileUrl: {
     type: String,
-    enum: ['free', 'pro', 'master', 'otrade'],
-    default: 'free'
+    required: function() {
+      return this.key === 'book';
+    }
+  },
+  videoUrl: {
+    type: String,
+    required: function() {
+      return this.key === 'video';
+    }
+  },
+  
+  // Legacy fields for backward compatibility
+  contentUrl: {
+    type: String,
+    required: false
   },
   slug: {
     type: String,

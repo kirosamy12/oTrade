@@ -243,40 +243,26 @@ export const updatePlan = async (req, res) => {
     console.log('=== UPDATE PLAN DEBUG START ===');
     console.log('Request Params:', req.params);
     console.log('Request Body:', req.body);
-    
-    const { key, price, translations, isActive, allowedContent, durationType, features, subscriptionOptions, addCourses, removeCourses, isFree } = req.body;
-    
-    console.log('KEY value:', key);
-    console.log('PRICE value:', price);
-    console.log('TRANSLATIONS value:', translations);
-    console.log('SUBSCRIPTION_OPTIONS value:', subscriptionOptions);
-    console.log('IS_FREE value:', isFree);
-    console.log('IS_ACTIVE value:', isActive);
-    console.log('ADD_COURSES value:', addCourses);
-    console.log('REMOVE_COURSES value:', removeCourses);
-    
-    if (translations) {
-      console.log('EN translation exists:', !!translations.en);
-      console.log('AR translation exists:', !!translations.ar);
-      console.log('EN translation content:', translations.en);
-      console.log('AR translation content:', translations.ar);
-    }
-    
-    if (subscriptionOptions) {
-      console.log('MONTHLY price:', subscriptionOptions.monthly?.price);
-      console.log('QUARTERLY price:', subscriptionOptions.quarterly?.price);
-      console.log('YEARLY price:', subscriptionOptions.yearly?.price);
-      console.log('SEMIANNUAL price:', subscriptionOptions.semiAnnual?.price);
-    }
-    
+
+    const {
+      key,
+      price,
+      translations,
+      isActive,
+      allowedContent,
+      durationType,
+      features,
+      subscriptionOptions,
+      addCourses,
+      removeCourses,
+      isFree
+    } = req.body;
+
     // Validate that the plan exists
     const existingPlan = await Plan.findById(req.params.id);
-    console.log('EXISTING PLAN FOUND:', !!existingPlan);
     if (!existingPlan) {
       return res.status(404).json({ error: 'Plan not found.' });
     }
-    
-    console.log('=== UPDATE PLAN DEBUG END ===');
 
     const updateData = {};
     if (key) updateData.key = key.toLowerCase();
@@ -284,31 +270,30 @@ export const updatePlan = async (req, res) => {
     if (translations) updateData.translations = translations;
     if (isActive !== undefined) updateData.isActive = isActive;
     if (isFree !== undefined) updateData.isFree = isFree;
-    
+
     // Handle allowedContent updates
-    if (allowedContent !== undefined) {
+    if (allowedContent) {
       updateData.allowedContent = {};
-      
-      // Handle courses array
-      if (allowedContent.courses !== undefined) {
-        updateData.allowedContent.courses = allowedContent.courses;
-      }
-      
-      // Handle other allowedContent arrays
-      if (allowedContent.psychology !== undefined) {
-        updateData.allowedContent.psychology = allowedContent.psychology;
-      }
-      if (allowedContent.webinars !== undefined) {
-        updateData.allowedContent.webinars = allowedContent.webinars;
+      if (allowedContent.courses) updateData.allowedContent.courses = allowedContent.courses;
+      if (allowedContent.psychology) updateData.allowedContent.psychology = allowedContent.psychology;
+      if (allowedContent.webinars) updateData.allowedContent.webinars = allowedContent.webinars;
+    }
+
+    // Validate durationType against enum
+    if (durationType !== undefined) {
+      const validDurations = ['monthly', 'quarterly', 'semiAnnual', 'yearly', 'lifetime'];
+      if (!validDurations.includes(durationType)) {
+        console.warn(`Invalid durationType "${durationType}" received, defaulting to "lifetime"`);
+        updateData.durationType = 'lifetime';
+      } else {
+        updateData.durationType = durationType;
       }
     }
-    
-    // NEW FIELDS: durationType and features
-    if (durationType !== undefined) updateData.durationType = durationType;
-    if (features !== undefined) updateData.features = features;
-    // NEW FIELD: subscriptionOptions
-    if (subscriptionOptions !== undefined) {
-      // Ensure we preserve existing subscription options if not provided in the update
+
+    if (features) updateData.features = features;
+
+    // Merge subscription options with existing
+    if (subscriptionOptions) {
       const existingSubscriptionOptions = existingPlan.subscriptionOptions || {};
       updateData.subscriptionOptions = {
         ...existingSubscriptionOptions,
@@ -316,60 +301,42 @@ export const updatePlan = async (req, res) => {
       };
     }
 
-    // Add courses to allowedContent if provided
-    if (addCourses && Array.isArray(addCourses) && addCourses.length > 0) {
+    // Add courses
+    if (addCourses?.length > 0) {
       const validCourseIds = addCourses.filter(id => mongoose.Types.ObjectId.isValid(id));
-      if (validCourseIds.length > 0) {
-        // Get existing allowed courses
-        const existingAllowedCourses = existingPlan.allowedContent.courses || [];
-        
-        // Add new courses, avoiding duplicates
-        for (const courseId of validCourseIds) {
-          const courseObjectId = new mongoose.Types.ObjectId(courseId);
-          if (!existingAllowedCourses.some(existingId => existingId.equals(courseObjectId))) {
-            existingAllowedCourses.push(courseObjectId);
-          }
-        }
-        
-        updateData.allowedContent = updateData.allowedContent || {};
-        updateData.allowedContent.courses = existingAllowedCourses;
-      }
+      const existingAllowedCourses = existingPlan.allowedContent.courses || [];
+      validCourseIds.forEach(id => {
+        const objId = new mongoose.Types.ObjectId(id);
+        if (!existingAllowedCourses.some(c => c.equals(objId))) existingAllowedCourses.push(objId);
+      });
+      updateData.allowedContent = updateData.allowedContent || {};
+      updateData.allowedContent.courses = existingAllowedCourses;
     }
-    
-    // Remove courses from allowedContent if provided
-    if (removeCourses && Array.isArray(removeCourses) && removeCourses.length > 0) {
+
+    // Remove courses
+    if (removeCourses?.length > 0) {
       const validCourseIds = removeCourses.filter(id => mongoose.Types.ObjectId.isValid(id));
-      if (validCourseIds.length > 0) {
-        // Get existing allowed courses
-        const existingAllowedCourses = updateData.allowedContent?.courses || existingPlan.allowedContent.courses || [];
-        
-        // Remove specified courses
-        updateData.allowedContent = updateData.allowedContent || {};
-        updateData.allowedContent.courses = existingAllowedCourses.filter(
-          existingId => !validCourseIds.some(removeId => existingId.equals(new mongoose.Types.ObjectId(removeId)))
-        );
-      }
+      const existingAllowedCourses = updateData.allowedContent?.courses || existingPlan.allowedContent.courses || [];
+      updateData.allowedContent = updateData.allowedContent || {};
+      updateData.allowedContent.courses = existingAllowedCourses.filter(
+        c => !validCourseIds.some(id => c.equals(new mongoose.Types.ObjectId(id)))
+      );
     }
 
-    const plan = await Plan.findByIdAndUpdate(
-      req.params.id,
-      updateData,
-      { new: true, runValidators: true }
-    );
-
-    if (!plan) {
-      return res.status(404).json({ error: 'Plan not found.' });
-    }
-
-    res.status(200).json({
-      message: 'Plan updated successfully',
-      plan
+    const plan = await Plan.findByIdAndUpdate(req.params.id, updateData, {
+      new: true,
+      runValidators: true
     });
+
+    if (!plan) return res.status(404).json({ error: 'Plan not found.' });
+
+    res.status(200).json({ message: 'Plan updated successfully', plan });
   } catch (error) {
     console.error('Error updating plan:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 };
+
 
 /**
  * Delete plan by ID (soft delete by setting isActive to false)

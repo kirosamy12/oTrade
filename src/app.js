@@ -43,6 +43,7 @@ import testimonialRoutes from '../src/modules/testimonials/testimonials.routes.j
 import partnerRoutes from './modules/partners/partner.routes.js';
 import newsRoutes from './modules/news/news.routes.js';
 import contactRoutes from './modules/contacts/contact.routes.js';
+import consultationRoutes from './modules/consultations/consultation.routes.js';
 
 app.use('/api/auth', authRoutes);
 app.use('/api/admin/subscriptions', subscriptionRoutes);
@@ -61,6 +62,7 @@ app.use('/api/testimonials', testimonialRoutes);
 app.use('/api/partners', partnerRoutes);
 app.use('/api/news', newsRoutes);
 app.use('/api/contacts', contactRoutes);
+app.use('/api/consultations', consultationRoutes);
 
 // Health check endpoint
 app.get('/health', (req, res) => {

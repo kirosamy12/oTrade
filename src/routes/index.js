@@ -8,5 +8,6 @@ const router = express.Router();
 // Mount all module routes here
 router.use('/auth', authRoutes);
 router.use('/contacts', contactRoutes);
+router.use('/consultations', consultationRoutes);
 
 export default router;       

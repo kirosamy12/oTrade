@@ -132,7 +132,6 @@ export default createCourse;
 
 
 
-
 const updateCourse = async (req, res, next) => {
   try {
     const { id } = req.params;
@@ -146,57 +145,59 @@ const updateCourse = async (req, res, next) => {
       });
     }
 
-    // ===== Ensure translations exist =====
-    course.title = course.title || { en: '', ar: '' };
-    course.description = course.description || { en: '', ar: '' };
-    course.content = course.content || { en: '', ar: '' };
+    // ===== Update translations =====
+    if (title || description || content) {
+      const updates = {};
 
-    // ===== Translations (ar / en) =====
-    if (title) {
-      if (title.en) course.title.en = title.en;
-      if (title.ar) course.title.ar = title.ar;
+      if (title) updates.title = title;
+      if (description) updates.description = description;
+      if (content) updates.content = content;
+
+      // EN
+      if (updates.title?.en || updates.description?.en || updates.content?.en) {
+        await Translation.findOneAndUpdate(
+          { entityType: 'course', entityId: id, language: 'en' },
+          {
+            title: updates.title?.en,
+            description: updates.description?.en,
+            content: updates.content?.en
+          },
+          { new: true }
+        );
+      }
+
+      // AR
+      if (updates.title?.ar || updates.description?.ar || updates.content?.ar) {
+        await Translation.findOneAndUpdate(
+          { entityType: 'course', entityId: id, language: 'ar' },
+          {
+            title: updates.title?.ar,
+            description: updates.description?.ar,
+            content: updates.content?.ar
+          },
+          { new: true }
+        );
+      }
     }
 
-    if (description) {
-      if (description.en) course.description.en = description.en;
-      if (description.ar) course.description.ar = description.ar;
-    }
-
-    if (content) {
-      if (content.en) course.content.en = content.en;
-      if (content.ar) course.content.ar = content.ar;
-    }
-
-    // ===== Slug auto-generate from EN title =====
-    if (title?.en) {
-      course.slug = slugify(title.en, {
-        lower: true,
-        strict: true
-      });
-    }
-
-    // ===== Plans (array of plan IDs) =====
+    // ===== Plans =====
     if (plans && Array.isArray(plans)) {
       course.plans = plans;
     }
 
-    // ===== File / Image =====
-    if (req.file) {
-      course.image = req.file.path;
-    }
-
     await course.save();
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
-      message: 'Course updated successfully',
-      data: course
+      message: 'Course updated successfully'
     });
 
   } catch (error) {
     next(error);
   }
 };
+
+
 
 
  

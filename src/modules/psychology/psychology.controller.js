@@ -8,280 +8,157 @@ import { uploadImage, uploadFile } from '../../utils/cloudinary.js';
 import { generateSlug } from '../../utils/translationHelper.js';
 import mongoose from 'mongoose';
 
-const createPsychology = async (req, res) => {
-  try {
-    console.log('\n================ CREATE PSYCHOLOGY DEBUG =================');
-    console.log('Content-Type:', req.headers['content-type']);
-    console.log('BODY:', req.body);
-    console.log('BODY KEYS:', Object.keys(req.body));
-    console.log('FILES:', req.files);
-    console.log('======================================================\n');
 
-    // Extract and validate the key field first
+
+ const createPsychology = async (req, res) => {
+  try {
+    console.log('\n===== CREATE PSYCHOLOGY DEBUG =====');
+    console.log('BODY:', req.body);
+    console.log('FILES:', req.files);
+    console.log('=================================\n');
+
+    // ===== Basic =====
     const key = req.body.key;
     if (!key || !['book', 'video', 'article'].includes(key)) {
-      return res.status(400).json({ error: 'Key is required and must be one of: book, video, article' });
+      return res.status(400).json({ error: 'Invalid psychology key' });
     }
 
+    const isFree = req.body.isFree === true || req.body.isFree === 'true';
+
     let plans = [];
-    let isActive = req.body.isActive !== undefined ? req.body.isActive === 'true' || req.body.isActive === true : true;
+    let contentUrl;
     let coverImageUrl;
     let fileUrl;
     let videoUrl;
-    let contentUrl;
     let translations = [];
 
-    /* =========================
-        ✅ HANDLE PLANS
-       ========================= */
-    if (req.body.plans) {
-      plans = Array.isArray(req.body.plans) ? req.body.plans : [req.body.plans];
-    } else if (req.body['plans[]']) {
-      plans = Array.isArray(req.body['plans[]']) ? req.body['plans[]'] : [req.body['plans[]']];
-    }
-    plans = plans.map(p => p.toString().trim()).filter(Boolean);
-    console.log('FINAL PLANS:', plans);
-    
-    // Validate all Plan IDs exist
-    if (!plans.length) return res.status(400).json({ error: 'Plans array is required.' });
-    
-    // Fetch all plans to validate existence and get pricing info
-    const fetchedPlans = await Plan.find({ _id: { $in: plans } });
-    if (fetchedPlans.length !== plans.length) {
-      return res.status(400).json({ error: 'One or more Plan IDs are invalid.' });
+    // ===== Plans Logic (نفس Course) =====
+    if (!isFree) {
+      if (req.body.plans)
+        plans = Array.isArray(req.body.plans) ? req.body.plans : [req.body.plans];
+      else if (req.body['plans[]'])
+        plans = Array.isArray(req.body['plans[]']) ? req.body['plans[]'] : [req.body['plans[]']];
+
+      plans = plans.map(p => p.toString().trim()).filter(Boolean);
+
+      if (!plans.length)
+        return res.status(400).json({ error: 'Plans are required when psychology is not free' });
+
+      const fetchedPlans = await Plan.find({ _id: { $in: plans } });
+      if (fetchedPlans.length !== plans.length)
+        return res.status(400).json({ error: 'Invalid Plan ID found' });
     }
 
-    /* =========================
-        📁 TYPE-SPECIFIC FIELDS
-       ========================= */
+    // ===== Content URL =====
+    contentUrl = req.body.contentUrl?.trim() || '';
+
+    // ===== Type-specific =====
     if (key === 'book') {
-      // Handle file upload for books
       if (req.files?.file) {
-        const file = req.files.file[0];
-        
-        // Validate file type is PDF
-        if (!file.mimetype || file.mimetype !== 'application/pdf') {
-          return res.status(400).json({ error: 'Only PDF files are allowed for books' });
-        }
-        
-        fileUrl = await uploadFile(file, 'psychology/books');
-      } else if (req.body.fileUrl) {
-        // If fileUrl provided in body (not uploaded)
-        fileUrl = req.body.fileUrl;
+        fileUrl = await uploadFile(req.files.file[0], 'psychology/books');
       } else {
-        return res.status(400).json({ error: 'PDF file is required for book type' });
+        return res.status(400).json({ error: 'PDF file is required for book' });
       }
-    } else if (key === 'video') {
-      // Handle video URL for videos
-      videoUrl = req.body.videoUrl?.trim();
-      if (!videoUrl) {
-        return res.status(400).json({ error: 'Video URL is required for video type' });
-      }
-    }
-    // For 'article' type, no additional file/URL is required
-    
-    // Common contentUrl field
-    contentUrl = req.body.contentUrl?.trim();
-    if (contentUrl) {
-      const urlValidation = validateContentUrl(contentUrl);
-      if (!urlValidation.valid) return res.status(400).json({ error: urlValidation.error });
     }
 
-    /* =========================
-        🖼️ COVER IMAGE
-       ========================= */
+    if (key === 'video') {
+      videoUrl = req.body.videoUrl?.trim();
+      if (!videoUrl)
+        return res.status(400).json({ error: 'Video URL is required' });
+    }
+
+    // ===== Cover Image =====
     if (req.files?.coverImage) {
-      // Upload directly from memory buffer
-      const coverImageFile = req.files.coverImage[0];
-      coverImageUrl = await uploadImage(coverImageFile, 'psychology');
-    } else if (req.files?.image) {
-      // Also accept 'image' field as alternative
-      const imageFile = req.files.image[0];
-      coverImageUrl = await uploadImage(imageFile, 'psychology');
+      coverImageUrl = await uploadImage(req.files.coverImage[0], 'psychology');
     } else if (req.body.coverImageUrl?.startsWith('data:image')) {
       coverImageUrl = await uploadImage(req.body.coverImageUrl, 'psychology');
-    } else if (req.body.image?.startsWith('data:image')) {
-      // Also accept 'image' field as alternative
-      coverImageUrl = await uploadImage(req.body.image, 'psychology');
     } else {
-      coverImageUrl = req.body.coverImageUrl || req.body.image;
+      coverImageUrl = req.body.coverImageUrl || '';
     }
 
-    /* =========================
-        🌍 TRANSLATIONS
-       ========================= */
-    // Initialize translation object
-    let translationObject = {
-      en: { title: '', description: '', content: '' },
-      ar: { title: '', description: '', content: '' }
-    };
-    
-    if (req.body.translations) {
-      try {
-        translations = typeof req.body.translations === 'string'
-          ? JSON.parse(req.body.translations)
-          : req.body.translations;
-        
-        // Normalize translations into the expected object format
-        translations.forEach(t => {
-          const lang = t.language?.toLowerCase().trim();
-          if (lang === 'en') {
-            translationObject.en = {
-              title: t.title?.trim() || '',
-              description: t.description?.trim() || '',
-              content: t.content?.trim() || ''
-            };
-          } else if (lang === 'ar') {
-            translationObject.ar = {
-              title: t.title?.trim() || '',
-              description: t.description?.trim() || '',
-              content: t.content?.trim() || ''
-            };
-          }
-        });
-      } catch {
-        translations = [];
-      }
-    } else {
-      // Handle nested objects: title, description, content
-      const titles = req.body.title || {};
-      const descriptions = req.body.description || {};
-      const contents = req.body.content || {};
+    // ===== Translations =====
+    const titles = req.body.title || {};
+    const descriptions = req.body.description || {};
+    const contents = req.body.content || {};
 
-      if (titles.en || descriptions.en || contents.en) {
-        translationObject.en = {
-          title: titles.en?.trim() || '',
-          description: descriptions.en?.trim() || '',
-          content: contents.en?.trim() || ''
-        };
-      }
+    if (titles.en || descriptions.en || contents.en)
+      translations.push({ language: 'en', title: titles.en || '', description: descriptions.en || '', content: contents.en || '' });
 
-      if (titles.ar || descriptions.ar || contents.ar) {
-        translationObject.ar = {
-          title: titles.ar?.trim() || '',
-          description: descriptions.ar?.trim() || '',
-          content: contents.ar?.trim() || ''
-        };
-      }
-      
-      // Handle bracket notation: title[en], title[ar], etc.
-      const enTitle = req.body['title[en]'] || req.body['title.en'];
-      const arTitle = req.body['title[ar]'] || req.body['title.ar'];
-      const enDescription = req.body['description[en]'] || req.body['description.en'];
-      const arDescription = req.body['description[ar]'] || req.body['description.ar'];
-      const enContent = req.body['content[en]'] || req.body['content.en'];
-      const arContent = req.body['content[ar]'] || req.body['content.ar'];
-      
-      if (enTitle !== undefined || arTitle !== undefined || 
-          enDescription !== undefined || arDescription !== undefined ||
-          enContent !== undefined || arContent !== undefined) {
-        
-        if (enTitle !== undefined) {
-          translationObject.en.title = enTitle?.trim() || '';
-        }
-        if (enDescription !== undefined) {
-          translationObject.en.description = enDescription?.trim() || '';
-        }
-        if (enContent !== undefined) {
-          translationObject.en.content = enContent?.trim() || '';
-        }
-        
-        if (arTitle !== undefined) {
-          translationObject.ar.title = arTitle?.trim() || '';
-        }
-        if (arDescription !== undefined) {
-          translationObject.ar.description = arDescription?.trim() || '';
-        }
-        if (arContent !== undefined) {
-          translationObject.ar.content = arContent?.trim() || '';
-        }
-      }
+    if (titles.ar || descriptions.ar || contents.ar)
+      translations.push({ language: 'ar', title: titles.ar || '', description: descriptions.ar || '', content: contents.ar || '' });
+
+    const validation = validateTranslationsForCreate(translations);
+    if (!validation.valid)
+      return res.status(400).json({ error: validation.error });
+
+    const { en, ar } = validation.data;
+    const slug = en?.title ? generateSlug(en.title) : undefined;
+
+    // ===== Paid / Subscription Flags =====
+    let isPaid = false;
+    let isInSubscription = false;
+
+    if (!isFree) {
+      const plansData = await Plan.find({ _id: { $in: plans } });
+
+      isInSubscription = plansData.some(plan =>
+        plan.subscriptionOptions &&
+        (
+          plan.subscriptionOptions.monthly?.price > 0 ||
+          plan.subscriptionOptions.quarterly?.price > 0 ||
+          plan.subscriptionOptions.semiAnnual?.price > 0 ||
+          plan.subscriptionOptions.yearly?.price > 0
+        )
+      );
+
+      isPaid = plansData.some(plan => plan.price > 0) || isInSubscription;
     }
 
-    console.log('PROCESSED TRANSLATIONS:', translationObject);
-    
-    // Prepare translations array for validation
-    const processedTranslations = [];
-    if (translationObject.en.title || translationObject.en.description || translationObject.en.content) {
-      processedTranslations.push({
-        language: 'en',
-        title: translationObject.en.title,
-        description: translationObject.en.description,
-        content: translationObject.en.content
-      });
-    }
-    
-    if (translationObject.ar.title || translationObject.ar.description || translationObject.ar.content) {
-      processedTranslations.push({
-        language: 'ar',
-        title: translationObject.ar.title,
-        description: translationObject.ar.description,
-        content: translationObject.ar.content
-      });
-    }
-
-    /* =========================
-        ✅ VALIDATE TRANSLATIONS
-       ========================= */
-    const validation = validateTranslationsForCreate(processedTranslations);
-    if (!validation.valid) return res.status(400).json({ error: validation.error });
-
-    const { ar, en } = validation.data;
-
-    /* =========================
-        🚀 CREATE PSYCHOLOGY
-       ========================= */
-       
-    // Generate slug from English title if available
-    let slug;
-    const enTitle = en?.title;
-    if (enTitle) {
-      slug = generateSlug(enTitle);
-    }
-    
-    const psychology = new Psychology({ 
+    // ===== Create Psychology =====
+    const psychology = new Psychology({
       key,
-      plans, 
-      isActive,
-      contentUrl, 
-      coverImageUrl, 
+      isFree,
+      plans: isFree ? [] : plans,
+      contentUrl,
+      coverImageUrl,
       fileUrl,
       videoUrl,
-      slug
+      slug,
+      isPaid,
+      isInSubscription
     });
+
     await psychology.save();
 
-    await createOrUpdateTranslation('psychology', psychology._id, 'ar', ar.title, ar.description, ar.content);
+    // ===== Save Translations =====
     await createOrUpdateTranslation('psychology', psychology._id, 'en', en.title, en.description, en.content);
+    await createOrUpdateTranslation('psychology', psychology._id, 'ar', ar.title, ar.description, ar.content);
 
-    // Link psychology to plans by adding psychology ID to each plan's allowedContent.psychology
-    if (plans && Array.isArray(plans)) {
+    // ===== Link to Plans =====
+    if (!isFree) {
       for (const planId of plans) {
         const plan = await Plan.findById(planId);
-        if (plan) {
-          // Add psychology ID to allowedContent.psychology if not already present
-          if (!plan.allowedContent.psychology.some(psychologyId => psychologyId.equals(psychology._id))) {
-            plan.allowedContent.psychology.push(psychology._id);
-            await plan.save();
-          }
+        if (plan && !plan.allowedContent.psychology.includes(psychology._id)) {
+          plan.allowedContent.psychology.push(psychology._id);
+          await plan.save();
         }
       }
     }
 
     const createdTranslations = await getTranslationsByEntity('psychology', psychology._id);
-    
     const response = formatAdminResponse(psychology, createdTranslations);
-    
+
     res.status(201).json({
-      message: 'Psychology content created successfully',
+      message: 'Psychology created successfully',
       psychology: response
     });
 
   } catch (error) {
-    console.error('❌ CREATE PSYCHOLOGY ERROR:', error);
+    console.error('CREATE PSYCHOLOGY ERROR:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 };
+
 
 const updatePsychology = async (req, res) => {
   try {
@@ -540,44 +417,34 @@ const deletePsychology = async (req, res) => {
   }
 };
 
+
+
 const getAllPsychology = async (req, res) => {
   try {
-    // Only return active psychology content
-    const psychologyList = await Psychology.find({ isActive: true }).sort({ createdAt: -1 });
+    const psychologies = await Psychology.find().sort({ createdAt: -1 });
 
-    // Accept-Language => Array of languages (supports | , or spaces)
-    const requestedLangs = (req.get('Accept-Language') || 'en')
-      .split(/[,|\s]/) // Split on , or | or space
-      .map(l => l.trim())
-      .filter(Boolean);
+    const response = await Promise.all(
+      psychologies.map(async (psych) => {
+        const translations = await getTranslationsByEntity('psychology', psych._id);
 
-    // User permissions
-    const isAdmin = req.user && (req.user.role === 'admin' || req.user.role === 'super_admin');
-    const userPlans = req.user && req.user.subscribedPlans ? req.user.subscribedPlans : ['free'];
-
-    // Get translations for each psychology
-    const psychologyWithTranslations = await Promise.all(
-      psychologyList.map(async (psychology) => {
-        const translations = await getTranslationsByEntity('psychology', psychology._id);
-
-        const content = await formatPsychologyContentResponse(
-          psychology,
-          translations,
-          requestedLangs[0] || 'en', // Use first requested language
-          userPlans,
-          isAdmin
-        );
-
-        return content;
+        // نفس الكود القديم بس ضفنا key
+        const formatted = formatAdminResponse(psych, translations);
+        return {
+          ...formatted,
+          key: psych.key // 👈 هنا ضفنا key
+        };
       })
     );
 
-    res.status(200).json({ psychology: psychologyWithTranslations });
+    res.status(200).json({ psychologies: response });
   } catch (error) {
-    console.error('Error fetching psychology:', error);
-    res.status(500).json({ error: 'Internal server error.' });
+    console.error('GET ALL PSYCHOLOGIES ERROR:', error);
+    res.status(500).json({ error: 'Internal server error' });
   }
 };
+
+export default getAllPsychology;
+
 
 const getPsychologyById = async (req, res) => {
   try {

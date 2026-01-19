@@ -1,58 +1,60 @@
 import mongoose from 'mongoose';
 
 const psychologySchema = new mongoose.Schema({
-  // Content type key (book, video, article)
-  key: {
-    type: String,
-    required: [true, 'Key is required'],
-    enum: {
-      values: ['book', 'video', 'article'],
-      message: 'Key must be one of: book, video, article'
-    }
+  // ===== Free / Paid =====
+  isFree: {
+    type: Boolean,
+    default: false
   },
-  
-  // Common fields for all types
+
   plans: {
     type: [String],
-    required: [true, 'Plans array is required']
+    required: function () {
+      return !this.isFree; // 👈 لو مش فري لازم plans
+    }
   },
-  isActive: {
-    type: Boolean,
-    default: true
-  },
-  coverImageUrl: {
+
+  // ===== Content =====
+  key: {
     type: String,
-    required: false
+    enum: ['book', 'video', 'article'],
+    required: true
   },
-  
-  // Type-specific fields
+
+  contentUrl: String,
+  coverImageUrl: String,
+
   fileUrl: {
     type: String,
-    required: function() {
+    required: function () {
       return this.key === 'book';
     }
   },
+
   videoUrl: {
     type: String,
-    required: function() {
+    required: function () {
       return this.key === 'video';
     }
   },
-  
-  // Legacy fields for backward compatibility
-  contentUrl: {
-    type: String,
-    required: false
+
+  // ===== محسوبة تلقائي =====
+  isPaid: {
+    type: Boolean,
+    default: false
   },
+
+  isInSubscription: {
+    type: Boolean,
+    default: false
+  },
+
   slug: {
     type: String,
-    required: false,
     unique: true,
     sparse: true
   }
-}, {
-  timestamps: true
-});
+}, { timestamps: true });
 
 const Psychology = mongoose.model('Psychology', psychologySchema);
 

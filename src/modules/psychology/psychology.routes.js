@@ -17,8 +17,8 @@ router.get('/advanced/:id', authenticate, requirePlan('master'), detectLanguage,
 
 // Admin routes
 router.post('/', authenticate(['admin', 'super_admin']), checkPermission('psychology', 'create'), uploadPsychology, createPsychology);
-router.patch('/:id', authenticate(['admin', 'super_admin']), checkPermission('psychology', 'update'), uploadPsychology, updatePsychology);
+router.put('/:id', authenticate(['admin', 'super_admin']), checkPermission('psychology', 'update'), uploadPsychology, updatePsychology);
 router.delete('/:id', authenticate(['admin', 'super_admin']), checkPermission('psychology', 'delete'), deletePsychology);
 router.get('/psychology/admin', authenticate(['admin', 'super_admin']), checkPermission('psychology', 'view'), getAllPsychology);
 
-export default router;
+export default router; 

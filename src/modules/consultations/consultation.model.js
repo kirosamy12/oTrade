@@ -19,14 +19,10 @@ const consultationSchema = new mongoose.Schema({
     lowercase: true,
     match: [/^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,3})+$/, 'Please enter a valid email address']
   },
-  consultationType: {
-    type: String,
-    required: [true, 'Consultation type is required'],
-    enum: {
-      values: ['general', 'financial', 'psychology', 'other'],
-      message: 'Consultation type must be one of: general, financial, psychology, other'
-    }
-  },
+consultationType: {
+  type: String,
+  required: [true, 'Consultation type is required']
+},
   message: {
     type: String,
     required: [true, 'Message is required'],

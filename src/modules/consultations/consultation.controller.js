@@ -1,5 +1,6 @@
 import Consultation from './consultation.model.js';
 import { sendSuccessResponse, sendErrorResponse } from '../../utils/response.js';
+import mongoose from 'mongoose';
 
 const createConsultation = async (req, res) => {
   try {
@@ -42,11 +43,8 @@ const createConsultation = async (req, res) => {
       return sendErrorResponse(res, 400, 'Consultation type is required');
     }
     
-    // Validate consultation type enum
-    const validTypes = ['general', 'financial', 'psychology', 'other'];
-    if (!validTypes.includes(consultationType)) {
-      return sendErrorResponse(res, 400, 'Consultation type must be one of: general, financial, psychology, other');
-    }
+    // ===== Removed enum validation =====
+    // Now any string is allowed for consultationType
     
     if (!message) {
       return sendErrorResponse(res, 400, 'Message is required');
@@ -105,24 +103,38 @@ const createConsultation = async (req, res) => {
   }
 };
 
- const getAllConsultations = async (req, res) => {
+
+const getAllConsultations = async (req, res) => {
   try {
-    const { consultationType } = req.query; // فلترة اختيارية حسب نوع الاستشارة
+    console.log('\n================ GET ALL CONSULTATIONS DEBUG =================');
+    console.log('User:', req.user);
+    console.log('Role:', req.role);
+    console.log('UserType:', req.userType);
+    console.log('======================================================\n');
+    
+    // Check if user is admin
+   
+    
+    const { consultationType } = req.query; // Optional filtering by consultation type
 
     let filter = {};
     if (consultationType) {
       filter.consultationType = consultationType;
     }
 
-    // جلب الاستشارات مرتبة من الأحدث للأقدم
+    // Fetch consultations sorted from newest to oldest
     const consultations = await Consultation.find(filter).sort({ createdAt: -1 });
-
-    res.status(200).json({
-      consultations
-    });
+    
+    console.log(`Fetched ${consultations.length} consultations`);
+    
+    // Return success response with all consultations
+    sendSuccessResponse(res, 200, 'Consultations retrieved successfully', consultations);
+    
   } catch (error) {
-    console.error('Error fetching consultations:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    console.error('❌ GET ALL CONSULTATIONS ERROR:', error);
+    
+    // Handle general server errors
+    sendErrorResponse(res, 500, 'Internal server error', error.message);
   }
 };
 

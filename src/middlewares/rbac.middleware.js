@@ -94,6 +94,45 @@ const authenticate = (allowedRoles = null) => {
     }
   };
 };
+const optionalAuthenticate = async (req, res, next) => {
+  try {
+    const authHeader = req.header('Authorization');
+
+    if (!authHeader) {
+      req.user = null;
+      req.userType = 'guest';
+      return next();
+    }
+
+    const token = authHeader.replace('Bearer ', '');
+    const decoded = verifyToken(token);
+
+    if (decoded.userType === 'admin') {
+      const admin = await Admin.findById(decoded.userId);
+      if (admin && admin.isActive) {
+        req.user = admin;
+        req.userType = 'admin';
+        req.role = admin.role;
+      }
+    } else {
+      const user = await User.findById(decoded.userId);
+      if (user) {
+        req.user = user;
+        req.userType = 'user';
+        req.role = user.role;
+      }
+    }
+
+    next();
+  } catch (err) {
+    // ❗ أي خطأ → اعتبره Guest
+    req.user = null;
+    req.userType = 'guest';
+    next();
+  }
+};
+
+export default optionalAuthenticate;
 
 /**
  * Permission check middleware

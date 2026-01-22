@@ -294,101 +294,201 @@ const getAllCourses = async (req, res) => {
 
 const getCourseById = async (req, res) => {
   try {
+    console.log('\n================ GET COURSE BY ID DEBUG =================');
+    console.log('Course ID:', req.params.id);
+    console.log('Accept-Language:', req.get('Accept-Language'));
+    console.log('User:', req.user);
+    console.log('======================================================\n');
+
     const { id } = req.params;
-    
-    // Validate ObjectId
+
+    // ===== Validate ObjectId =====
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({ error: 'Invalid course ID.' });
     }
-    
-    // Get requested language from Accept-Language header, default to 'en'
+
+    // ===== Language =====
     const requestedLang = req.get('Accept-Language') || 'en';
-    
+
+    // ===== Get course =====
     const course = await Course.findById(id);
     if (!course) {
       return res.status(404).json({ error: 'Course not found.' });
     }
 
-    // 🔐 JWT AUTHENTICATION CHECK
-    if (!req.user) {
-      return res.status(401).json({
-        error: 'Unauthorized'
+    // ===== Get translations =====
+    const translations = await getTranslationsByEntity('course', course._id);
+    const translation =
+      translations.find(t => t.language === requestedLang) ||
+      translations.find(t => t.language === 'en') ||
+      translations[0];
+
+    // ===== Roles =====
+    const isAdmin =
+      req.user &&
+      (req.user.role === 'admin' || req.user.role === 'super_admin');
+
+    // ===== Free / Paid =====
+    const isFreeCourse = course.isPaid === false;
+
+    // ======================================================
+    // 🟢 FREE COURSE (Public Access)
+    // ======================================================
+    if (isFreeCourse) {
+      console.log('Returning full data for FREE course');
+
+      return res.status(200).json({
+        course: {
+          id: course._id,
+          title: translation?.title || '',
+          description: translation?.description || '',
+          content: translation?.content || '',
+          coverImageUrl: course.coverImageUrl || '',
+          contentUrl: course.contentUrl || '',
+          isPaid: false,
+          locked: false
+        }
       });
     }
-    
-    // Get translations for the course
-    const translations = await getTranslationsByEntity('course', course._id);
-    
-    // Determine if user is admin (from JWT via middleware)
-    const isAdmin = req.userType === 'admin' && req.role === 'admin';
-    const isSuperAdmin = req.userType === 'admin' && req.role === 'super_admin';
-    const isAdminUser = isAdmin || isSuperAdmin;
-    
-    // Get user plans from user object if it exists (regular user)
-    // Use the new subscribedPlans field, fallback to legacy subscriptionPlan
-    const userPlans = req.user && req.user.subscribedPlans ? req.user.subscribedPlans : [];
-    
-    // Use formatContentResponse with access control
-    const content = formatContentResponse(
-      course,
-      translations,
-      requestedLang, // Use requested language from header instead of req.lang
-      userPlans,
-      isAdminUser
-    );
-    
-    // 🔒 LOCKED COURSE ACCESS CHECK
-    if (content.locked === true) {
-      // Check user flags for access
-      const isInSubscription = req.user.subscriptionStatus === 'active';
-      const isPaid = req.user.subscriptionPlan !== 'free';
-      
-      if (!isInSubscription && !isPaid) {
-        return res.status(403).json({
-          error: 'You are not authorized to access this course.'
-        });
-      }
+
+    // ======================================================
+    // 🔐 PAID COURSE
+    // ======================================================
+
+    // ❌ Paid course requires authentication
+    if (!req.user) {
+      return res.status(401).json({
+        error: 'Authentication required to access paid courses'
+      });
     }
-    
-    // Add course-specific fields
-    content.price = course.price;
-    if (isAdminUser && course.plans) content.plans = course.plans;
-    
-    res.status(200).json({
-      course: content
+
+    // ✅ Admin & Super Admin bypass
+    if (isAdmin) {
+      console.log('Admin access granted');
+
+      return res.status(200).json({
+        course: {
+          id: course._id,
+          title: translation?.title || '',
+          description: translation?.description || '',
+          content: translation?.content || '',
+          coverImageUrl: course.coverImageUrl || '',
+          contentUrl: course.contentUrl || '',
+          isPaid: true,
+          locked: false
+        }
+      });
+    }
+
+    // ===== Subscription check =====
+    const userActivePlans = req.user.activePlans || [];
+    const coursePlans = course.plans || [];
+
+    const hasAccess = coursePlans.some(planId =>
+      userActivePlans.some(userPlanId =>
+        userPlanId.toString() === planId.toString()
+      )
+    );
+
+    console.log('User active plans:', userActivePlans);
+    console.log('Course plans:', coursePlans);
+    console.log('Has access:', hasAccess);
+
+    // ======================================================
+    // 🔓 Subscribed User
+    // ======================================================
+    if (hasAccess) {
+      return res.status(200).json({
+        course: {
+          id: course._id,
+          title: translation?.title || '',
+          description: translation?.description || '',
+          content: translation?.content || '',
+          coverImageUrl: course.coverImageUrl || '',
+          contentUrl: course.contentUrl || '',
+          isPaid: true,
+          locked: false
+        }
+      });
+    }
+
+    // ======================================================
+    // 🔒 Locked Course (Not Subscribed)
+    // ======================================================
+    return res.status(200).json({
+      course: {
+        id: course._id,
+        title: translation?.title || '',
+        description: translation?.description || '',
+        isPaid: true,
+        locked: true
+      }
     });
+
   } catch (error) {
-    console.error('Error fetching course:', error);
+    console.error('Error fetching course by ID:', error);
     res.status(500).json({ error: 'Internal server error.' });
   }
 };
+
+
+
 const getFreeCourses = async (req, res) => {
   try {
+    console.log('\n================ GET FREE COURSES DEBUG =================');
+    console.log('Accept-Language:', req.get('Accept-Language'));
+    console.log('User:', req.user);
+    console.log('======================================================\n');
+    
+    // Get requested language from Accept-Language header, default to 'en'
     const requestedLang = req.get('Accept-Language') || 'en';
-
-    const courses = await Course.find({ isPaid: false }).sort({ createdAt: -1 });
-
-    const isAdmin =
-      req.user && (req.user.role === 'admin' || req.user.role === 'super_admin');
-
-    const userPlans =
-      req.user && req.user.subscribedPlans ? req.user.subscribedPlans : ['free'];
-
-    const result = await Promise.all(
+    
+    // Find courses that are free (no plans or price = 0)
+    // Using both isFree flag and checking if plans array is empty or has no valid plans
+    const courses = await Course.find({
+      $or: [
+        { isFree: true },
+        { plans: { $exists: true, $size: 0 } },
+        { plans: { $eq: null } },
+        { isPaid: false }
+      ]
+    }).sort({ createdAt: -1 });
+    
+    // Determine if user is admin (from JWT via middleware)
+    const isAdmin = req.user && (req.user.role === 'admin' || req.user.role === 'super_admin');
+    
+    // Get user plans from user object if it exists (regular user)
+    const userPlans = req.user && req.user.subscribedPlans ? req.user.subscribedPlans : [];
+    
+    // Get translations for each course
+    const coursesWithTranslations = await Promise.all(
       courses.map(async (course) => {
         const translations = await getTranslationsByEntity('course', course._id);
-
-        return formatContentResponse(
+        
+        // Use formatContentResponse with access control
+        const content = formatContentResponse(
           course,
           translations,
-          requestedLang,
+          requestedLang, // Use requested language from header
           userPlans,
           isAdmin
         );
+        
+        // For free courses, ensure locked status is false and exclude paid-only fields
+        content.locked = false;
+        
+        // Remove plans field from response for non-admin users to hide paid-only info
+        if (!isAdmin && content.plans) {
+          delete content.plans;
+        }
+        
+        return content;
       })
     );
-
-    res.status(200).json({ courses: result });
+    
+    res.status(200).json({
+      courses: coursesWithTranslations
+    });
   } catch (error) {
     console.error('Error fetching free courses:', error);
     res.status(500).json({ error: 'Internal server error.' });
@@ -397,36 +497,49 @@ const getFreeCourses = async (req, res) => {
 
 const getPaidCourses = async (req, res) => {
   try {
+    console.log('\n================ GET PAID COURSES CATALOG DEBUG =================');
+    console.log('Accept-Language:', req.get('Accept-Language'));
+    console.log('======================================================\n');
+    
+    // Get requested language from Accept-Language header, default to 'en'
     const requestedLang = req.get('Accept-Language') || 'en';
-
-    const courses = await Course.find({ isPaid: true }).sort({ createdAt: -1 });
-
-    const isAdmin =
-      req.user && (req.user.role === 'admin' || req.user.role === 'super_admin');
-
-    const userPlans =
-      req.user && req.user.subscribedPlans ? req.user.subscribedPlans : ['free'];
-
-    const result = await Promise.all(
+    
+    // Find courses that are linked to one or more plans (paid courses)
+    const courses = await Course.find({
+      isPaid: true,
+      plans: { $exists: true, $ne: [], $not: { $size: 0 } }
+    }).sort({ createdAt: -1 });
+    
+    // Get translations for each course
+    const coursesCatalog = await Promise.all(
       courses.map(async (course) => {
         const translations = await getTranslationsByEntity('course', course._id);
-
-        return formatContentResponse(
-          course,
-          translations,
-          requestedLang,
-          userPlans,
-          isAdmin
-        );
+        
+        // Get the translation for the requested language only
+        const translation = translations.find(t => t.language === requestedLang) || 
+                           translations.find(t => t.language === 'en') || 
+                           translations[0];
+        
+        // Return only catalog metadata - NEVER content or contentUrl
+        return {
+          id: course._id,
+          title: translation?.title || '',
+          description: translation?.description || '',
+          coverImageUrl: course.coverImageUrl || '',
+          isPaid: true,
+          locked: true // Always locked in catalog view
+        };
       })
     );
-
-    res.status(200).json({ courses: result });
+    
+    res.status(200).json({
+      courses: coursesCatalog
+    });
   } catch (error) {
-    console.error('Error fetching paid courses:', error);
+    console.error('Error fetching paid courses catalog:', error);
     res.status(500).json({ error: 'Internal server error.' });
   }
 };
 
 
-export { createCourse, updateCourse, getFreeCourses,getPaidCourses,deleteCourse, getAllCourses, getCourseById };
+export { createCourse, updateCourse, deleteCourse, getAllCourses, getCourseById, getFreeCourses, getPaidCourses };

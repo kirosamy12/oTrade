@@ -1,5 +1,5 @@
 import express from 'express';
-import { authenticate } from '../../middlewares/rbac.middleware.js';
+import optionalAuthenticate, { authenticate } from '../../middlewares/rbac.middleware.js';
 import { checkPermission } from '../../middlewares/rbac.middleware.js';
 import { detectLanguage } from '../../middlewares/lang.middleware.js';
 import { requirePlan } from '../../middlewares/subscription.middleware.js';
@@ -12,7 +12,7 @@ const router = express.Router();
 router.get('/', detectLanguage, getAllCourses);//done           
 router.get('/free', detectLanguage, getFreeCourses);
 router.get('/paid', detectLanguage, getPaidCourses);
-router.get('/:id', detectLanguage, getCourseById);
+router.get('/:id',optionalAuthenticate, detectLanguage, getCourseById);
 
 // Authenticated routes with subscription plan requirements
 router.get('/protected/:id', authenticate, requirePlan('pro'), detectLanguage, getCourseById);

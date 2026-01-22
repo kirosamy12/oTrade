@@ -1,0 +1,172 @@
+{
+  "info": {
+    "name": "Webinars Enhanced API",
+    "description": "Complete API collection for enhanced Webinars module with registration functionality",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collections.json"
+  },
+  "item": [
+    {
+      "name": "Admin Webinars",
+      "item": [
+        {
+          "name": "Create Enhanced Webinar",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_jwt_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "multipart/form-data",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "title",
+                  "value": "Advanced Trading Strategies",
+                  "type": "text"
+                },
+                {
+                  "key": "speakerName",
+                  "value": "John Smith",
+                  "type": "text"
+                },
+                {
+                  "key": "speakerImage",
+                  "type": "file",
+                  "src": "/path/to/speaker/image.jpg"
+                },
+                {
+                  "key": "description",
+                  "value": "Learn advanced trading strategies for experienced traders",
+                  "type": "text"
+                },
+                {
+                  "key": "webinarDate",
+                  "value": "2026-02-15",
+                  "type": "text"
+                },
+                {
+                  "key": "webinarTime",
+                  "value": "14:00",
+                  "type": "text"
+                },
+                {
+                  "key": "link",
+                  "value": "https://meet.google.com/xxx-yyyy-zzz",
+                  "type": "text"
+                },
+                {
+                  "key": "isActive",
+                  "value": "true",
+                  "type": "text"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/webinars",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "webinars"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Public Webinars",
+      "item": [
+        {
+          "name": "Get All Webinars",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/webinars",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "webinars"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Webinar By ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/webinars/{{webinarId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "webinars", "{{webinarId}}"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Webinar Registration",
+      "item": [
+        {
+          "name": "Register for Webinar",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fullName\": \"Alice Johnson\",\n  \"phoneNumber\": \"+1234567890\",\n  \"email\": \"alice@example.com\",\n  \"country\": \"United States\",\n  \"message\": \"Looking forward to learning more about trading strategies\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/webinars/{{webinarId}}/register",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "webinars", "{{webinarId}}", "register"]
+            }
+          },
+          "response": []
+        }
+      ]
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [""]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [""]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:4000"
+    },
+    {
+      "key": "admin_jwt_token",
+      "value": "your_admin_jwt_token_here"
+    },
+    {
+      "key": "webinarId",
+      "value": "webinar_object_id_here"
+    }
+  ]
+}

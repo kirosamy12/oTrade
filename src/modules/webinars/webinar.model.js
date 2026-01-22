@@ -1,33 +1,34 @@
 import mongoose from 'mongoose';
 
 const webinarSchema = new mongoose.Schema({
-  date: {
+  title: {
+    type: String,
+    required: [true, 'Title is required']
+  },
+  speakerName: {
+    type: String,
+    required: [true, 'Speaker name is required']
+  },
+  speakerImage: {
+    type: String
+  },
+  description: {
+    type: String
+  },
+  webinarDate: {
     type: Date,
-    required: false
+    required: [true, 'Webinar date is required']
   },
-  isLive: {
+  webinarTime: {
+    type: String,
+    required: [true, 'Webinar time is required']
+  },
+  link: {
+    type: String
+  },
+  isActive: {
     type: Boolean,
-    default: false
-  },
-  plans: {
-    type: [String],
-    required: true
-  },
-  contentUrl: {
-    type: String,
-    required: false
-  },
-  coverImageUrl: {
-    type: String,
-    required: false
-  },
-  // NEW FIELD: References to required plans
-  requiredPlans: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Plan' }],
-  slug: {
-    type: String,
-    required: false,
-    unique: true,
-    sparse: true
+    default: true
   }
 }, {
   timestamps: true

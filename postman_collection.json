@@ -1,0 +1,119 @@
+{
+  "info": {
+    "name": "Spaceremit Payment Integration API",
+    "description": "Complete API collection for Spaceremit payment integration with subscription management",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collections.json"
+  },
+  "item": [
+    {
+      "name": "Payments",
+      "item": [
+        {
+          "name": "Create Payment",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userId\": \"60f1b8b3c8d5b4a1e8f2c5d1\",\n  \"planId\": \"60f1b8b3c8d5b4a1e8f2c5d2\",\n  \"subscriptionType\": \"monthly\",\n  \"amount\": 99.99\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/payments/create",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "payments", "create"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Payment Callback (Spaceremit)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"payment_id\": \"pay_123456789_abc123xyz\",\n  \"response_status\": \"success\",\n  \"status_tag\": \"A\",\n  \"transaction_id\": \"txn_987654321_zyx321cba\",\n  \"is_test\": false\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/payments/callback",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "payments", "callback"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "User Subscriptions",
+      "item": [
+        {
+          "name": "Get User Subscriptions",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/payments/users/{{userId}}/subscriptions",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "payments", "users", "{{userId}}", "subscriptions"]
+            }
+          },
+          "response": []
+        }
+      ]
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [""]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [""]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:4000"
+    },
+    {
+      "key": "userId",
+      "value": "user_object_id_here"
+    },
+    {
+      "key": "jwt_token",
+      "value": "your_jwt_token_here"
+    }
+  ]
+}

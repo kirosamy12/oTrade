@@ -1,27 +1,37 @@
 import mongoose from 'mongoose';
 
 const strategySchema = new mongoose.Schema({
-  level: {
-    type: String,
-    enum: ['beginner', 'intermediate', 'advanced'],
-    default: 'beginner'
+  isFree: {
+    type: Boolean,
+    default: false
   },
+
   plans: {
     type: [String],
-    required: true
+    required: function () {
+      return !this.isFree;
+    }
   },
-  contentUrl: {
-    type: String,
-    required: false
+
+  coverImageUrl: String,
+  videoUrl: String,
+
+  // محسوبة تلقائي
+  isPaid: {
+    type: Boolean,
+    default: false
   },
-  coverImageUrl: {
+  isInSubscription: {
+    type: Boolean,
+    default: false
+  },
+
+  slug: {
     type: String,
-    required: false
+    unique: true,
+    sparse: true
   }
-}, {
-  timestamps: true
-});
+}, { timestamps: true });
 
 const Strategy = mongoose.model('Strategy', strategySchema);
-
 export default Strategy;

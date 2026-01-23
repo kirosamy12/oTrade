@@ -15,7 +15,6 @@ router.get('/paid', detectLanguage, getPaidCourses);
 router.get('/:id',optionalAuthenticate, detectLanguage, getCourseById);
 
 // Authenticated routes with subscription plan requirements
-router.get('/protected/:id', authenticate, requirePlan('pro'), detectLanguage, getCourseById);
 
 // Admin routes
 router.post('/addcourse', authenticate(['admin', 'super_admin']), checkPermission('courses', 'create'), uploadWithOptionalImage, createCourse); //done

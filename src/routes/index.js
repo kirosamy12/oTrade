@@ -3,6 +3,7 @@ import authRoutes from '../modules/auth/auth.routes.js';
 import contactRoutes from '../modules/contacts/contact.routes.js';
 import consultationRoutes from '../modules/consultations/consultation.routes.js';
 import paymentRoutes from '../modules/payments/payment.routes.js';
+import userRoutes from '../modules/users/user.routes.js';
 
 const router = express.Router();
 
@@ -10,6 +11,7 @@ const router = express.Router();
 router.use('/auth', authRoutes);
 router.use('/contacts', contactRoutes);
 router.use('/consultations', consultationRoutes);
+router.use('/users', userRoutes);
 //router.use('/payments', paymentRoutes);
 
 export default router;       

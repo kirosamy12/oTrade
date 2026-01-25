@@ -42,9 +42,9 @@ const userSchema = new mongoose.Schema({
     duration: { type: String, enum: ['monthly', 'yearly'] },
     startDate: Date,
     endDate: Date
-  }
+  } 
 }, {
-  timestamps: true
+  timestamps: true 
 });
 
 // Create index on email for faster lookups

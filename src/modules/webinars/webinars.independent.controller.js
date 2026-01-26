@@ -295,5 +295,26 @@ const registerForWebinarIndependent = async (req, res) => {
     sendErrorResponse(res, 500, 'Internal server error', error.message);
   }
 };
+const getWebinarSubmissions = async (req, res) => {
+  try {
+    const { id } = req.params;
 
-export { createWebinarIndependent, getAllWebinarsIndependent, getWebinarByIdIndependent, registerForWebinarIndependent };
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ error: 'Invalid webinar ID' });
+    }
+
+    const submissions = await WebinarRegistration
+      .find({ webinar: id })
+      .sort({ registeredAt: -1 });
+
+    res.status(200).json({
+      count: submissions.length,
+      submissions
+    });
+  } catch (error) {
+    console.error('Error fetching webinar submissions:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
+export { createWebinarIndependent,getWebinarSubmissions, getAllWebinarsIndependent, getWebinarByIdIndependent, registerForWebinarIndependent };

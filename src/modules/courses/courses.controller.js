@@ -242,14 +242,14 @@ const getAllCourses = async (req, res) => {
 
     // Accept-Language => مصفوفة لغات (يدعم | , أو مسافات)
     const requestedLangs = (req.get('Accept-Language') || 'en')
-      .split(/[,|\s]/) // يفصل على , أو | أو مسافة
+      .split(/[,|\s]/)
       .map(l => l.trim())
       .filter(Boolean);
 
     // فلتر حسب نوع الدورة
     let filter = {};
     if (type) {
-      if (type === 'free') filter.plans = 'free';
+      if (type === 'free') filter.isFree = true;
       else if (type === 'paid') filter.isPaid = true;
       else return res.status(400).json({ error: 'Type must be either free or paid.' });
     }
@@ -257,8 +257,13 @@ const getAllCourses = async (req, res) => {
     const courses = await Course.find(filter).sort({ createdAt: -1 });
 
     // صلاحيات المستخدم
-    const isAdmin = req.user && (req.user.role === 'admin' || req.user.role === 'super_admin');
-    const userPlans = req.user && req.user.subscriptionPlan ? [req.user.subscriptionPlan] : ['free'];
+    const isAdmin =
+      req.user && (req.user.role === 'admin' || req.user.role === 'super_admin');
+
+    const userPlans =
+      req.user && req.user.subscriptionPlan
+        ? [req.user.subscriptionPlan]
+        : ['free'];
 
     // احضار الترجمات لكل كورس
     const coursesWithTranslations = await Promise.all(
@@ -273,8 +278,11 @@ const getAllCourses = async (req, res) => {
           isAdmin
         );
 
-        // إضافات بسيطة
-        if (course.coverImage) content.coverImage = course.coverImage;
+        // ===== الإضافة الوحيدة المطلوبة =====
+        content.isFree = course.isFree === true;
+
+        // إضافات موجودة مسبقًا
+        if (course.coverImageUrl) content.coverImageUrl = course.coverImageUrl;
         if (course.contentUrl) content.contentUrl = course.contentUrl;
 
         return content;
@@ -287,6 +295,7 @@ const getAllCourses = async (req, res) => {
     res.status(500).json({ error: 'Internal server error.' });
   }
 };
+
 
 
 

@@ -316,5 +316,39 @@ const getWebinarSubmissions = async (req, res) => {
     res.status(500).json({ error: 'Internal server error' });
   }
 };
+const deleteWebinar = async (req, res) => {
+  try {
+    const { id } = req.params;
 
-export { createWebinarIndependent,getWebinarSubmissions, getAllWebinarsIndependent, getWebinarByIdIndependent, registerForWebinarIndependent };
+    // ===== Validate ObjectId =====
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ error: 'Invalid webinar ID.' });
+    }
+
+    // ===== Find webinar =====
+    const webinar = await Webinar.findById(id);
+    if (!webinar) {
+      return res.status(404).json({ error: 'Webinar not found.' });
+    }
+
+    // ===== Delete translations =====
+    await Translation.deleteMany({
+      entityType: 'webinar',
+      entityId: id
+    });
+
+    // ===== Delete webinar =====
+    await Webinar.findByIdAndDelete(id);
+
+    res.status(200).json({
+      message: 'Webinar deleted successfully.'
+    });
+  } catch (error) {
+    console.error('DELETE WEBINAR ERROR:', error);
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+};
+
+ 
+
+export { createWebinarIndependent,deleteWebinar,getWebinarSubmissions, getAllWebinarsIndependent, getWebinarByIdIndependent, registerForWebinarIndependent };

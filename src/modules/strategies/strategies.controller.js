@@ -166,8 +166,11 @@ const getAllStrategies = async (req, res) => {
       req.user && req.user.activePlans ? req.user.activePlans : ['free'];
 
     const response = await Promise.all(
-      strategies.map(async strategy => {
-        const translations = await getTranslationsByEntity('strategy', strategy._id);
+      strategies.map(async (strategy) => {
+        const translations = await getTranslationsByEntity(
+          'strategy',
+          strategy._id
+        );
 
         const content = formatContentResponseMultiLang(
           strategy,
@@ -177,6 +180,15 @@ const getAllStrategies = async (req, res) => {
           isAdmin
         );
 
+        // ===== isFree =====
+        content.isFree = strategy.isFree === true;
+
+        // ===== لو مش فري رجّع البلانز =====
+        if (strategy.isFree === false) {
+          content.plans = strategy.plans || [];
+        }
+
+        // الموجود مسبقًا
         content.coverImageUrl = strategy.coverImageUrl;
         content.videoUrl = strategy.videoUrl;
 
@@ -190,6 +202,8 @@ const getAllStrategies = async (req, res) => {
     res.status(500).json({ error: 'Internal server error' });
   }
 };
+
+
 
 /* ======================================================
    GET STRATEGY BY ID

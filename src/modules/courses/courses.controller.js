@@ -278,8 +278,13 @@ const getAllCourses = async (req, res) => {
           isAdmin
         );
 
-        // ===== الإضافة الوحيدة المطلوبة =====
+        // ===== isFree =====
         content.isFree = course.isFree === true;
+
+        // ===== لو الكورس مش فري رجّع البلانز =====
+        if (course.isFree === false) {
+          content.plans = course.plans || [];
+        }
 
         // إضافات موجودة مسبقًا
         if (course.coverImageUrl) content.coverImageUrl = course.coverImageUrl;
@@ -295,6 +300,7 @@ const getAllCourses = async (req, res) => {
     res.status(500).json({ error: 'Internal server error.' });
   }
 };
+
 
 
 

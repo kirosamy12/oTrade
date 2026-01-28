@@ -62,6 +62,9 @@ const uploadMixed = multer({
 // Export both single field upload and none for mixed handling
 export default upload;
 export const uploadWithOptionalImage = upload.fields([{ name: 'coverImage', maxCount: 1 }]);
+export const uploadWebinar = upload.fields([
+  { name: 'speakerImage', maxCount: 1 }
+]);
 export const uploadPsychology = uploadMixed.fields([
   { name: 'coverImage', maxCount: 1 },
   { name: 'file', maxCount: 1 }  // For PDF uploads in psychology module

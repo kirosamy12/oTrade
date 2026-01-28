@@ -131,11 +131,10 @@ export default createCourse;
 
 
 
-
 const updateCourse = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { title, description, content, plans } = req.body;
+    const { title, description, content, plans, isFree } = req.body;
 
     const course = await Course.findById(id);
     if (!course) {
@@ -143,6 +142,26 @@ const updateCourse = async (req, res, next) => {
         success: false,
         message: 'Course not found'
       });
+    }
+
+    // ===== isFree logic (FINAL FIX) =====
+    if (typeof isFree !== 'undefined') {
+      const freeValue = isFree === true || isFree === 'true';
+
+      if (freeValue === true) {
+        course.isFree = true;
+        course.isPaid = false;
+        course.isInSubscription = false;
+        course.plans = [];
+      } else {
+        course.isFree = false;
+
+        if (Array.isArray(plans) && plans.length > 0) {
+          course.plans = plans;
+          course.isPaid = true;
+          course.isInSubscription = true;
+        }
+      }
     }
 
     // ===== Update translations =====
@@ -153,7 +172,6 @@ const updateCourse = async (req, res, next) => {
       if (description) updates.description = description;
       if (content) updates.content = content;
 
-      // EN
       if (updates.title?.en || updates.description?.en || updates.content?.en) {
         await Translation.findOneAndUpdate(
           { entityType: 'course', entityId: id, language: 'en' },
@@ -161,12 +179,10 @@ const updateCourse = async (req, res, next) => {
             title: updates.title?.en,
             description: updates.description?.en,
             content: updates.content?.en
-          },
-          { new: true }
+          }
         );
       }
 
-      // AR
       if (updates.title?.ar || updates.description?.ar || updates.content?.ar) {
         await Translation.findOneAndUpdate(
           { entityType: 'course', entityId: id, language: 'ar' },
@@ -174,15 +190,9 @@ const updateCourse = async (req, res, next) => {
             title: updates.title?.ar,
             description: updates.description?.ar,
             content: updates.content?.ar
-          },
-          { new: true }
+          }
         );
       }
-    }
-
-    // ===== Plans =====
-    if (plans && Array.isArray(plans)) {
-      course.plans = plans;
     }
 
     await course.save();
@@ -196,6 +206,8 @@ const updateCourse = async (req, res, next) => {
     next(error);
   }
 };
+
+
 
 
 

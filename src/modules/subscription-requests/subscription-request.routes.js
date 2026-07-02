@@ -25,6 +25,8 @@ router.get('/my-requests', authenticate(['user', 'admin', 'super_admin']), getMy
 router.get('/', authenticate(['admin', 'super_admin']), checkPermission('subscriptions', 'view'), pagination(), getAllSubscriptionRequests);
 router.get('/:id', authenticate(['admin', 'super_admin']), checkPermission('subscriptions', 'view'), getSubscriptionRequest);
 router.post('/:id/approve', authenticate(['admin', 'super_admin']), checkPermission('subscriptions', 'update'), approveSubscriptionRequest);
+router.put('/:id/approve', authenticate(['admin', 'super_admin']), checkPermission('subscriptions', 'update'), approveSubscriptionRequest);
 router.post('/:id/reject', authenticate(['admin', 'super_admin']), checkPermission('subscriptions', 'update'), rejectSubscriptionRequest);
+router.put('/:id/reject', authenticate(['admin', 'super_admin']), checkPermission('subscriptions', 'update'), rejectSubscriptionRequest);
 
 export default router;

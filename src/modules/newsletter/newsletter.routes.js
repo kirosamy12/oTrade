@@ -14,7 +14,7 @@ const router = express.Router();
  */
 
 // Admin route - Get all subscriptions (must come first)
-router.get('/', authenticate(['admin', 'super_admin']), checkPermission('emails', 'read'), pagination(), getAllSubscriptions);
+router.get('/', authenticate(['admin', 'super_admin']), checkPermission('emails', 'view'), pagination(), getAllSubscriptions);
 
 // Public route - Subscribe
 router.post('/', subscribeToNewsletter);

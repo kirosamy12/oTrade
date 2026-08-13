@@ -231,6 +231,7 @@ export const getAnalysisBySlug = async (req, res) => {
           updates: updatesWithTranslations,
           translations: translationsObject,
           publishedAt: analysis.publishedAt || analysis.createdAt,
+          updatedAt: analysis.updatedAt,
           createdAt: analysis.createdAt
         }
       });
@@ -255,6 +256,7 @@ export const getAnalysisBySlug = async (req, res) => {
         image: analysis.image,
         updates: updatesWithTranslations,
         publishedAt: analysis.publishedAt || analysis.createdAt,
+          updatedAt: analysis.updatedAt,
         createdAt: analysis.createdAt
       }
     });
@@ -467,6 +469,7 @@ export const createAnalysis = async (req, res) => {
         updates: [],
         translations: translationsObject,
         publishedAt: analysis.publishedAt || analysis.createdAt,
+          updatedAt: analysis.updatedAt,
         createdAt: analysis.createdAt
       }
     });
@@ -646,6 +649,7 @@ export const updateAnalysis = async (req, res) => {
         updates: analysis.updates || [],
         translations: translationsObject,
         publishedAt: analysis.publishedAt || analysis.createdAt,
+          updatedAt: analysis.updatedAt,
         createdAt: analysis.createdAt
       }
     });
@@ -1292,6 +1296,7 @@ export const getAnalysisById = async (req, res) => {
           updates: updatesWithTranslations,
           translations: translationsObject,
           publishedAt: analysis.publishedAt || analysis.createdAt,
+          updatedAt: analysis.updatedAt,
           createdAt: analysis.createdAt
         }
       });
@@ -1316,6 +1321,7 @@ export const getAnalysisById = async (req, res) => {
         image: analysis.image,
         updates: updatesWithTranslations,
         publishedAt: analysis.publishedAt || analysis.createdAt,
+          updatedAt: analysis.updatedAt,
         createdAt: analysis.createdAt
       }
     });
